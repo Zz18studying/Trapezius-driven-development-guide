@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-本地DeepSeek模型生成完整FAQ
+使用 DeepSeek API 生成完整FAQ
 - 普通景点：5条
 - 核心景点：8-10条
 - 通用类别：每类至少10条
@@ -12,9 +12,9 @@
 
 import json
 import re
-import requests
 import time
 import os
+from openai import OpenAI
 
 # ==================== 路径配置 ====================
 # 获取脚本所在目录和项目根目录
@@ -29,32 +29,38 @@ OUTPUT_FILE = os.path.join(DATA_PROCESSED, "faq_final.json")
 # 确保输出目录存在
 os.makedirs(DATA_PROCESSED, exist_ok=True)
 
-# ==================== 模型配置 ====================
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "deepseek-r1:7b"
+# ==================== API 配置 ====================
+# DeepSeek API 配置
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = "deepseek-v4-flash"
+
+# 初始化 OpenAI 客户端（兼容 DeepSeek API）
+client = OpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com"
+)
 
 
-def call_deepseek(prompt):
-    """调用本地 DeepSeek 模型"""
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "num_predict": 8192
-            }
-        },
-        timeout=300
-    )
-    return response.json()['response']
+def call_deepseek_api(prompt, temperature=0.7):
+    """调用 DeepSeek API"""
+    try:
+        response = client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=4096
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"   ❌ API调用失败: {e}")
+        return None
 
 
 def fix_and_parse_json(text):
     """修复并解析JSON"""
+    if not text:
+        return None
+
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0]
     elif "```" in text:
@@ -143,14 +149,19 @@ def generate_attraction_faq(attraction, target_count):
 现在生成{target_count}条FAQ："""
 
     print(f"      📤 {name} ({target_count}条)...")
-    result = call_deepseek(prompt)
+    result = call_deepseek_api(prompt)
+
+    if not result:
+        print(f"         ❌ API调用失败")
+        return []
+
     faq_list = fix_and_parse_json(result)
 
     if faq_list and len(faq_list) >= 3:
         print(f"         ✅ 生成 {len(faq_list)} 条")
         return faq_list[:target_count]
     else:
-        print(f"         ⚠️ 生成失败")
+        print(f"         ⚠️ JSON解析失败，返回空列表")
         return []
 
 
@@ -178,23 +189,35 @@ def generate_general_faq(category_name, category_data, target_count):
 现在生成{target_count}条FAQ："""
 
     print(f"      📤 {category_name} ({target_count}条)...")
-    result = call_deepseek(prompt)
+    result = call_deepseek_api(prompt)
+
+    if not result:
+        print(f"         ❌ API调用失败")
+        return []
+
     faq_list = fix_and_parse_json(result)
 
     if faq_list:
         print(f"         ✅ 生成 {len(faq_list)} 条")
         return faq_list[:target_count]
     else:
-        print(f"         ⚠️ 生成失败")
+        print(f"         ⚠️ JSON解析失败，返回空列表")
         return []
 
 
 def main():
     print("=" * 70)
-    print("本地DeepSeek模型 - 完整FAQ生成")
+    print("DeepSeek API - 完整FAQ生成")
     print(f"项目根目录: {PROJECT_ROOT}")
+    print(f"使用模型: {DEEPSEEK_MODEL}")
     print("核心景点8-10条 | 普通景点5条 | 通用类别10+条")
     print("=" * 70)
+
+    # 检查 API Key
+    if DEEPSEEK_API_KEY == "你的API-Key":
+        print("\n⚠️ 请先设置 DEEPSEEK_API_KEY 环境变量！")
+        print("   或在代码中填入你的API Key")
+        return
 
     # 加载数据
     print(f"\n📖 加载景点数据...")
@@ -234,7 +257,7 @@ def main():
         faq_list = generate_attraction_faq(attr, target_count=10)
         if faq_list:
             all_faq.extend(faq_list)
-        time.sleep(1.5)
+        time.sleep(0.5)  # API 调用间隔
 
     # ==================== 第二部分：普通景点 ====================
     print("\n" + "=" * 70)
@@ -246,7 +269,7 @@ def main():
         faq_list = generate_attraction_faq(attr, target_count=5)
         if faq_list:
             all_faq.extend(faq_list)
-        time.sleep(1)
+        time.sleep(0.5)
 
     # ==================== 第三部分：通用类别 ====================
     print("\n" + "=" * 70)
@@ -297,7 +320,7 @@ def main():
         faq_list = generate_general_faq(cat_name, cat_data, target)
         if faq_list:
             all_faq.extend(faq_list)
-        time.sleep(1.5)
+        time.sleep(0.5)
 
     # ==================== 去重 ====================
     seen = set()
@@ -315,7 +338,8 @@ def main():
         "普通景点数": len(normal_list),
         "通用类别数": len(general_categories),
         "生成时间": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "模型": MODEL,
+        "模型": DEEPSEEK_MODEL,
+        "api_type": "DeepSeek API",
         "faq": unique_faq
     }
 

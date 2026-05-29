@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-大模型调用服务
+大模型调用服务 - 使用 DeepSeek API
 """
 
 import sys
 import os
-import json
 import re
-import requests
+from openai import OpenAI
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.dirname(CURRENT_DIR)
@@ -18,37 +17,31 @@ import config
 
 class LLMService:
     def __init__(self):
-        self.url = config.OLLAMA_URL
-        self.model = config.OLLAMA_MODEL
-        self._check_ollama()
+        # 从环境变量或 config 获取 API Key
+        self.api_key = os.environ.get("DEEPSEEK_API_KEY", getattr(config, 'DEEPSEEK_API_KEY', ''))
 
-    def _check_ollama(self):
-        try:
-            response = requests.post(
-                self.url,
-                json={"model": self.model, "prompt": "test", "stream": False},
-                timeout=5
-            )
-            if response.status_code == 200:
-                print(f"✅ LLM服务初始化成功")
-                print(f"   模型: {self.model}")
-            else:
-                print(f"⚠️ Ollama服务异常: {response.status_code}")
-        except Exception as e:
-            print(f"⚠️ Ollama服务连接失败: {e}")
+        if not self.api_key:
+            print("⚠️ 未设置 DEEPSEEK_API_KEY，LLM 服务将不可用")
+            print("   请设置环境变量: set DEEPSEEK_API_KEY=你的API-Key")
+            self.client = None
+            return
+
+        # 初始化 DeepSeek 客户端
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url="https://api.deepseek.com"
+        )
+        self.model = getattr(config, 'DEEPSEEK_MODEL', 'deepseek-v4-flash')
+        print(f"✅ LLM服务初始化成功（DeepSeek API）")
+        print(f"   模型: {self.model}")
 
     def is_ready(self):
-        try:
-            response = requests.post(
-                self.url,
-                json={"model": self.model, "prompt": "test", "stream": False},
-                timeout=5
-            )
-            return response.status_code == 200
-        except:
-            return False
+        return self.client is not None
 
     def chat(self, question: str, context: str = "", history: list = None) -> dict:
+        if not self.is_ready():
+            return {"success": False, "answer": "AI服务未就绪", "error": "LLM not ready"}
+
         system_prompt = """你是灵山胜境景区的AI导游，名叫"小灵"。
 你的职责是热情、耐心地回答游客关于灵山胜境的问题，答案要准确简洁。"""
 
@@ -69,42 +62,19 @@ class LLMService:
             messages.extend(history[-6:])
         messages.append({"role": "user", "content": user_message})
 
-        prompt = self._build_prompt(messages)
-
         try:
-            response = requests.post(
-                self.url,
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.7, "top_p": 0.95, "num_predict": 1024}
-                },
-                timeout=60
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024
             )
-
-            if response.status_code == 200:
-                answer = response.json().get('response', '')
-                answer = self._clean_answer(answer)
-                return {"success": True, "answer": answer, "error": None}
-            else:
-                return {"success": False, "answer": "", "error": f"API错误: {response.status_code}"}
+            answer = response.choices[0].message.content
+            answer = self._clean_answer(answer)
+            return {"success": True, "answer": answer, "error": None}
         except Exception as e:
+            print(f"❌ API调用失败: {e}")
             return {"success": False, "answer": "", "error": str(e)}
-
-    def _build_prompt(self, messages):
-        prompt_parts = []
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-            if role == "system":
-                prompt_parts.append(f"System: {content}")
-            elif role == "user":
-                prompt_parts.append(f"User: {content}")
-            elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}")
-        prompt_parts.append("Assistant: ")
-        return "\n\n".join(prompt_parts)
 
     def _clean_answer(self, answer):
         answer = re.sub(r'^Assistant:\s*', '', answer)
