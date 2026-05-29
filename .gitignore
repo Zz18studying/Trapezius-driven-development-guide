@@ -27,4 +27,9 @@ miniprogram/
 
 # 系统文件
 .DS_Store
-Thumbs.db
+Thumbs.dbbackend/chroma_db/
+backend/audio/
+backend/test.mp3
+backend/test_baidu_tts.py
+*.pyc
+__pycache__/

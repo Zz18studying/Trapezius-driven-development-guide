@@ -3,12 +3,13 @@
 FastAPI主入口
 灵山胜境AI导游后端服务
 """
-
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
-from routers import chat, health
+from routers import chat, health, voice
+from fastapi.staticfiles import StaticFiles
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -28,10 +29,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ========== 添加静态文件目录 ==========
+audio_dir = "/var/www/Trapezius-driven-development-guide/backend/audio"
+os.makedirs(audio_dir, exist_ok=True)
+app.mount("/audio", StaticFiles(directory=audio_dir), name="audio")
+# ===================================
+
+
 # 注册路由
 app.include_router(chat.router)
 app.include_router(health.router)
-
+app.include_router(voice.router)
 
 # 启动事件
 @app.on_event("startup")

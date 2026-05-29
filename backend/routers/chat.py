@@ -3,6 +3,7 @@
 对话路由
 """
 
+import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
@@ -10,9 +11,7 @@ from typing import Optional, List
 import sys
 import os
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-BACKEND_DIR = os.path.dirname(CURRENT_DIR)
-sys.path.insert(0, BACKEND_DIR)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
@@ -36,6 +35,9 @@ class ChatResponse(BaseModel):
 
 @router.post("/ask", response_model=ChatResponse)
 async def ask(request: ChatRequest):
+    total_start = time.time()
+    print(f"\n[API] 收到请求: {request.question[:50]}...")
+
     rag_service = get_rag_service()
     llm_service = get_llm_service()
 
@@ -43,16 +45,21 @@ async def ask(request: ChatRequest):
     sources = []
 
     if request.use_rag and rag_service.is_ready():
+        rag_start = time.time()
         search_result = rag_service.search(request.question, request.n_results)
+        print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
+
         if search_result['success'] and search_result['results']:
             sources = search_result['results'][:3]
             context = rag_service.get_context(request.question, request.n_results)
 
+    llm_start = time.time()
     llm_result = llm_service.chat(request.question, context)
+    print(f"[API] LLM调用耗时: {time.time() - llm_start:.2f}秒")
 
     if not llm_result['success']:
         if sources:
-            answer = sources[0].get('answer', '服务暂时不可用')
+            answer = sources[0].get('answer', '服务暂时不可用，请稍后再试。')
         else:
             answer = "服务暂时不可用，请稍后再试。"
         return ChatResponse(
@@ -62,6 +69,7 @@ async def ask(request: ChatRequest):
             error=llm_result['error']
         )
 
+    print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
     return ChatResponse(
         success=True,
         answer=llm_result['answer'],
