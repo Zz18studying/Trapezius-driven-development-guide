@@ -2,15 +2,11 @@
 """
 统一数据提取与合并脚本（DeepSeek API增强版）
 功能：
-1. 从文档1提取灵山胜境景点数据
+1. 从文档1提取灵山胜境 + 拈花湾禅意小镇 景点数据
 2. 从文档2提取表格数据
 3. 使用DeepSeek API智能清洗和补充数据
 4. 自动匹配表格到对应景点并合并
 5. 生成补充FAQ
-
-适配新目录结构：
-- 原始文档位置：data/raw/
-- 输出文件位置：data/processed/
 """
 
 import os
@@ -139,9 +135,9 @@ FIELD_MAPPING = {
 }
 
 
-# ==================== 1. 从文档1提取景点数据 ====================
+# ==================== 1. 从文档1提取景点数据（灵山+拈花湾） ====================
 def extract_attractions_from_doc1(file_path):
-    """从文档1提取灵山胜境景点数据"""
+    """从文档1提取灵山胜境及拈花湾景点数据"""
     print(f"   读取文件: {os.path.basename(file_path)}")
     doc = Document(file_path)
     attractions = []
@@ -161,12 +157,16 @@ def extract_attractions_from_doc1(file_path):
                 continue
 
             scenic_name = cells[0].text.strip()
-            if "拈花湾" in scenic_name:
-                continue
-            if "灵山胜境" not in scenic_name:
+            # 判断景区类型
+            if "灵山胜境" in scenic_name:
+                scenic_type = "lingshan"
+            elif "拈花湾" in scenic_name:
+                scenic_type = "nianhuawan"
+            else:
                 continue
 
             attraction = {
+                "scenic_type": scenic_type,
                 "id": cells[1].text.strip() if len(cells) > 1 else "",
                 "name": cells[2].text.strip() if len(cells) > 2 else "",
                 "location": cells[3].text.strip() if len(cells) > 3 else "",
@@ -183,7 +183,8 @@ def extract_attractions_from_doc1(file_path):
 
             if attraction["name"]:
                 attractions.append(attraction)
-                print(f"   ✅ 景点: {attraction['id']} {attraction['name']}")
+                prefix = "灵山" if scenic_type == "lingshan" else "拈花湾"
+                print(f"   ✅ {prefix}景点: {attraction['id']} {attraction['name']}")
 
     return attractions
 
