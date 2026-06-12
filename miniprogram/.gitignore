@@ -1,0 +1,12 @@
+# 本地开发配置（不提交）
+project.private.config.json
+
+# 依赖和缓存
+node_modules/
+miniprogram_npm/
+unpackage/
+.log
+
+# IDE配置
+.idea/
+.vscode/

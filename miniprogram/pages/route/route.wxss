@@ -1,0 +1,134 @@
+/* pages/route/route.wxss */
+.container {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+  padding: 30rpx;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.title {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+}
+
+.subtitle {
+  font-size: 26rpx;
+  color: #999;
+  margin-top: 10rpx;
+}
+
+.interests {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 40rpx;
+}
+
+.interest-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx;
+  background-color: white;
+  border-radius: 20rpx;
+  width: 180rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+  transition: all 0.3s;
+}
+
+.interest-item.active {
+  background-color: #4a6741;
+  color: white;
+  transform: scale(1.05);
+}
+
+.interest-item .icon {
+  font-size: 50rpx;
+  margin-bottom: 10rpx;
+}
+
+.route-detail {
+  background-color: white;
+  border-radius: 30rpx;
+  padding: 30rpx;
+  margin-top: 20rpx;
+}
+
+.route-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.route-name {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #4a6741;
+}
+
+.route-duration {
+  font-size: 26rpx;
+  color: #999;
+}
+
+.route-desc {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.spots {
+  margin-top: 30rpx;
+}
+
+.spots-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.spot-list {
+  background-color: #f5f5f5;
+  border-radius: 20rpx;
+  padding: 20rpx;
+}
+
+.spot-item {
+  display: flex;
+  align-items: center;
+  padding: 15rpx 0;
+  border-bottom: 1rpx solid #e0e0e0;
+}
+
+.spot-item:last-child {
+  border-bottom: none;
+}
+
+.spot-num {
+  width: 50rpx;
+  height: 50rpx;
+  background-color: #4a6741;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+  font-size: 24rpx;
+}
+
+.btn-ask {
+  margin-top: 40rpx;
+  background-color: #4a6741;
+  color: white;
+  border-radius: 50rpx;
+  font-size: 30rpx;
+}
