@@ -1,0 +1,65 @@
+<!-- pages/index/index.wxml -->
+<view class="container">
+  <!-- 聊天区域 -->
+  <scroll-view 
+    class="chat-area" 
+    scroll-y 
+    scroll-top="{{scrollTop}}"
+    scroll-with-animation
+  >
+    <block wx:for="{{messages}}" wx:key="id">
+      <view class="message-item {{item.role}}">
+        <view class="avatar">
+          <image wx:if="{{item.role === 'user'}}" src="/images/user-avatar.png"></image>
+          <image wx:else src="/images/ai-avatar.png"></image>
+        </view>
+        <view class="message-content">
+          <text>{{item.content}}</text>
+          <view class="time">{{item.time}}</view>
+        </view>
+      </view>
+    </block>
+    
+    <!-- AI正在输入 -->
+    <view wx:if="{{isTyping}}" class="message-item assistant">
+      <view class="avatar">
+        <image src="/images/ai-avatar.png"></image>
+      </view>
+      <view class="message-content">
+        <view class="typing-dots">
+          <span></span><span></span><span></span>
+        </view>
+      </view>
+    </view>
+    
+    <view id="bottom"></view>
+  </scroll-view>
+
+  <!-- 快捷按钮行 -->
+  <view class="quick-buttons">
+    <view class="quick-btn" bindtap="goToRoute">
+      <image src="/images/route.png"></image>
+      <text>路线推荐</text>
+    </view>
+  </view>
+
+  <!-- 输入区域 -->
+  <view class="input-area">
+    <view 
+      class="voice-btn {{isRecording ? 'recording' : ''}}"
+      bindtouchstart="onTouchStart"
+      bindtouchend="onTouchEnd"
+    >
+      <image src="/images/voice.png"></image>
+    </view>
+    <input 
+      class="input" 
+      placeholder="输入问题..."
+      value="{{inputText}}"
+      bindinput="onInput"
+      confirm-type="send"
+      bindconfirm="sendMessage"
+    />
+    <button class="send-btn" bindtap="sendMessage">发送</button>
+  </view>
+</view>
