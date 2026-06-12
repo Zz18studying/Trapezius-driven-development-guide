@@ -33,3 +33,4 @@ backend/test.mp3
 backend/test_baidu_tts.py
 *.pyc
 __pycache__/
+backend/chroma_db/
