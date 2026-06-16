@@ -4,6 +4,7 @@
 """
 
 import time
+import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
@@ -15,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
+from services.db_service import save_conversation   # 导入保存函数
 
 router = APIRouter(prefix="/api/chat", tags=["对话"])
 
@@ -68,6 +70,23 @@ async def ask(request: ChatRequest):
             sources=sources if sources else None,
             error=llm_result['error']
         )
+
+    # ========== 新增：保存对话记录 ==========
+    try:
+        # 将 sources 转为 JSON 字符串存储
+        sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
+        await save_conversation(
+            session_id=request.session_id or "unknown",
+            question=request.question,
+            answer=llm_result['answer'],
+            sources=sources_json,
+            response_time=time.time() - total_start,
+            sentiment=None  # 后续可增加情感分析
+        )
+        print("[API] 对话记录已保存")
+    except Exception as e:
+        print(f"[API] 保存对话记录失败: {e}")
+    # ======================================
 
     print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
     return ChatResponse(

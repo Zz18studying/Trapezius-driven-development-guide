@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from backend.models.database import (
+from models.database import (
     Conversation, KnowledgeDocument, DigitalHumanConfig, SessionLocal, init_db
 )
 

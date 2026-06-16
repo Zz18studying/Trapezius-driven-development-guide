@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from routers import chat, health, voice
+from routers import chat, health, voice, admin
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
 
@@ -85,12 +85,7 @@ app = FastAPI(
 # ==================== CORS 配置（允许域名访问） ====================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://lingshanai.cn",
-        "http://lingshanai.cn",
-    ],
+    allow_origins=["*"],  # 允许所有来源
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,7 +102,7 @@ app.mount("/audio", StaticFiles(directory=audio_dir), name="audio")
 app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(voice.router)
-
+app.include_router(admin.router)
 
 # ==================== 根路径 ====================
 @app.get("/")

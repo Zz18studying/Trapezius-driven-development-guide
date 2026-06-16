@@ -92,6 +92,16 @@ async def get_conversations_api(limit: int = 100, offset: int = 0):
         "msg": "success"
     }
 
+@router.get("/sentiment/topics")
+async def get_hot_topics_api(limit: int = 5):
+    """获取热门话题（LLM 聚类）"""
+    from services.topic_service import get_hot_topics
+    topics = await get_hot_topics(limit)
+    return {
+        "code": 0,
+        "data": topics,
+        "msg": "success"
+    }
 
 # ==================== 2. 知识库管理 ====================
 @router.post("/knowledge/upload")

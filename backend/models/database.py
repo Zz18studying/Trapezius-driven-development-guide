@@ -15,7 +15,17 @@ Base = declarative_base()
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data.db")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# ========== 修改：添加连接池参数 ==========
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=3600,        # 1小时回收连接，避免被服务器关闭
+    pool_pre_ping=True        # 使用前检查连接是否存活
+)
+# ========================================
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
