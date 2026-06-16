@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>灵山胜境AI导游</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a3c1a 0%, #2d4a1e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 700px;
+        }
+        .chat-header {
+            background: #4a6741;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 80%;
+        }
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #4a6741;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .message.user .message-avatar { background: #6b8c5c; }
+        .message-content {
+            background: #f0f0f0;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+        .message.user .message-content {
+            background: #4a6741;
+            color: white;
+        }
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 12px;
+            background: white;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+        }
+        .input-area input:focus { border-color: #4a6741; }
+        .send-btn {
+            background: #4a6741;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .send-btn:hover { background: #5a7e51; }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .loading-dots span {
+            animation: blink 1.4s infinite;
+            display: inline-block;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink {
+            0%, 60%, 100% { opacity: 0.4; }
+            30% { opacity: 1; }
+        }
+        .speaking-indicator {
+            display: none;
+            font-size: 12px;
+            color: #4a6741;
+            margin-left: 10px;
+            animation: pulse 1s infinite;
+        }
+        .speaking-indicator.active {
+            display: inline-block;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .assistant .message-content {
+            display: flex;
+            flex-direction: column;
+        }
+        .assistant .message-content .speaking-indicator {
+            margin-left: 0;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">🏯 灵山胜境 AI导游</div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？
+                    <div class="message-time">刚刚</div>
+                </div>
+            </div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="输入问题..." autocomplete="off">
+            <button class="send-btn" id="sendBtn">发送</button>
+        </div>
+    </div>
+
+    <script>
+        // ========== 配置 ==========
+        const API_BASE = 'https://lingshanai.cn';
+        // 如果后端在本地，用这个：
+        // const API_BASE = 'http://localhost:8000';
+
+        // ========== DOM 元素 ==========
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        let isWaiting = false;
+        let currentAudio = null;
+
+        // ========== 消息渲染 ==========
+        function addMessage(content, role) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            const avatar = role === 'user' ? '👤' : '🤖';
+            const time = new Date().toLocaleTimeString();
+
+            let contentHtml = escapeHtml(content);
+
+            if (role === 'assistant') {
+                contentHtml += `<span class="speaking-indicator" id="speakingIndicator">🔊 播放中...</span>`;
+            }
+
+            div.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-content">
+                    ${contentHtml}
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+            chatMessages.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return div;
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function showTyping() {
+            const div = document.createElement('div');
+            div.className = 'message assistant';
+            div.id = 'typingIndicator';
+            div.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <span class="loading-dots"><span>●</span><span>●</span><span>●</span></span>
+                </div>
+            `;
+            chatMessages.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function hideTyping() {
+            const el = document.getElementById('typingIndicator');
+            if (el) el.remove();
+        }
+
+        function showSpeakingIndicator() {
+            const el = document.getElementById('speakingIndicator');
+            if (el) el.classList.add('active');
+        }
+
+        function hideSpeakingIndicator() {
+            const el = document.getElementById('speakingIndicator');
+            if (el) el.classList.remove('active');
+        }
+
+        // ========== 语音播报 ==========
+        async function speakText(text) {
+            if (!text) return;
+
+            showSpeakingIndicator();
+
+            try {
+                const res = await fetch(`${API_BASE}/api/voice/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, voice_type: 0 })
+                });
+
+                const data = await res.json();
+
+                if (data.success && data.audio_url) {
+                    if (currentAudio) {
+                        currentAudio.pause();
+                        currentAudio = null;
+                    }
+
+                    const audio = new Audio(data.audio_url);
+                    currentAudio = audio;
+
+                    audio.onplay = () => {
+                        showSpeakingIndicator();
+                    };
+
+                    audio.onended = () => {
+                        hideSpeakingIndicator();
+                        currentAudio = null;
+                    };
+
+                    audio.onerror = () => {
+                        console.error('音频播放失败');
+                        hideSpeakingIndicator();
+                        currentAudio = null;
+                    };
+
+                    audio.play().catch(err => {
+                        console.error('播放失败:', err);
+                        hideSpeakingIndicator();
+                    });
+                } else {
+                    console.error('TTS 返回失败:', data.error);
+                    hideSpeakingIndicator();
+                }
+            } catch (err) {
+                console.error('语音播报请求失败:', err);
+                hideSpeakingIndicator();
+            }
+        }
+
+        // ========== 发送消息 ==========
+        async function sendMessage() {
+            const question = messageInput.value.trim();
+            if (!question || isWaiting) return;
+
+            messageInput.value = '';
+            addMessage(question, 'user');
+            isWaiting = true;
+            sendBtn.disabled = true;
+            showTyping();
+
+            try {
+                const res = await fetch(`${API_BASE}/api/chat/ask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, use_rag: true, n_results: 3 })
+                });
+
+                const data = await res.json();
+                hideTyping();
+
+                if (data.success) {
+                    addMessage(data.answer, 'assistant');
+                    // 自动语音播报
+                    await speakText(data.answer);
+                } else {
+                    addMessage('抱歉，服务暂时不可用。', 'assistant');
+                }
+            } catch (err) {
+                hideTyping();
+                console.error(err);
+                addMessage('网络开小差了，请稍后再试。', 'assistant');
+            } finally {
+                isWaiting = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // ========== 事件绑定 ==========
+        sendBtn.onclick = sendMessage;
+        messageInput.onkeypress = (e) => {
+            if (e.key === 'Enter') sendMessage();
+        };
+        messageInput.focus();
+
+        console.log('✅ 灵山胜境AI导游已加载');
+        console.log(`📡 API地址: ${API_BASE}/api/chat/ask`);
+    </script>
+</body>
+</html>
