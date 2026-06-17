@@ -4,10 +4,11 @@
 """
 
 import os
-import json
 import time
 import random
 import base64
+import tempfile
+import subprocess
 import requests
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
@@ -55,9 +56,10 @@ def get_access_token():
         return None
 
 
+# ==================== TTS 语音合成 ====================
 class TTSRequest(BaseModel):
     text: str
-    voice_type: Optional[int] = 0
+    voice_type: Optional[int] = 0  # 0:女声, 1:男声
 
 
 @router.post("/tts")
@@ -97,7 +99,7 @@ async def text_to_speech(request: TTSRequest):
             with open(audio_path, "wb") as f:
                 f.write(response.content)
 
-            # 🔥 关键修改：返回相对路径，不包含域名和协议
+            # 返回相对路径（解决 HTTPS 混合内容问题）
             audio_url = f"/audio/{audio_filename}"
             print(f"[TTS] 合成成功: {audio_url}")
             return {"success": True, "audio_url": audio_url}
@@ -109,9 +111,13 @@ async def text_to_speech(request: TTSRequest):
         return {"success": False, "error": str(e)}
 
 
+# ==================== ASR 语音识别 ====================
 @router.post("/asr")
 async def speech_recognition(audio: UploadFile = File(...)):
-    """语音识别 - 百度 ASR"""
+    """
+    语音识别 - 百度 ASR
+    自动将 WebM/MP3 转换为 PCM 格式
+    """
     if not BAIDU_API_KEY or not BAIDU_SECRET_KEY:
         return {"success": False, "error": "未配置百度云密钥"}
 
@@ -119,21 +125,46 @@ async def speech_recognition(audio: UploadFile = File(...)):
     if not token:
         return {"success": False, "error": "获取 access_token 失败"}
 
-    try:
-        audio_data = await audio.read()
-        print(f"[ASR] 音频大小: {len(audio_data)} bytes")
+    tmp_in_path = None
+    tmp_pcm_path = None
 
-        audio_base64 = base64.b64encode(audio_data).decode()
+    try:
+        # 1. 读取音频数据
+        audio_data = await audio.read()
+        print(f"[ASR] 原始音频大小: {len(audio_data)} bytes")
+
+        # 2. 保存为临时文件（浏览器录音通常是 webm 或 mp3）
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
+            tmp_in.write(audio_data)
+            tmp_in_path = tmp_in.name
+        print(f"[ASR] 临时文件: {tmp_in_path}")
+
+        # 3. 使用 ffmpeg 转换为 PCM（16kHz, 单声道, 16bit）
+        tmp_pcm_path = tempfile.NamedTemporaryFile(suffix=".pcm", delete=False).name
+        cmd = f"ffmpeg -i {tmp_in_path} -ar 16000 -ac 1 -f s16le {tmp_pcm_path} -y"
+        result = subprocess.run(cmd, shell=True, capture_output=True)
+
+        if result.returncode != 0:
+            print(f"[ASR] ffmpeg 转换失败: {result.stderr.decode()}")
+            return {"success": False, "error": "音频格式转换失败"}
+
+        # 4. 读取 PCM 数据
+        with open(tmp_pcm_path, "rb") as f:
+            pcm_data = f.read()
+        print(f"[ASR] 转换后 PCM 大小: {len(pcm_data)} bytes")
+
+        # 5. 调用百度 ASR API
+        audio_base64 = base64.b64encode(pcm_data).decode()
 
         url = "https://vop.baidu.com/server_api"
         payload = {
-            "format": "mp3",
+            "format": "pcm",
             "rate": 16000,
             "channel": 1,
             "cuid": "lingshan_guide",
             "token": token,
             "speech": audio_base64,
-            "len": len(audio_data)
+            "len": len(pcm_data)
         }
 
         response = requests.post(url, json=payload, timeout=10)
@@ -148,7 +179,22 @@ async def speech_recognition(audio: UploadFile = File(...)):
             else:
                 return {"success": False, "error": "未识别到语音"}
         else:
-            return {"success": False, "error": result.get("err_msg", "识别失败")}
+            error_msg = result.get("err_msg", "识别失败")
+            return {"success": False, "error": error_msg}
+
     except Exception as e:
         print(f"[ASR] 异常: {e}")
         return {"success": False, "error": str(e)}
+
+    finally:
+        # 清理临时文件
+        if tmp_in_path and os.path.exists(tmp_in_path):
+            try:
+                os.unlink(tmp_in_path)
+            except:
+                pass
+        if tmp_pcm_path and os.path.exists(tmp_pcm_path):
+            try:
+                os.unlink(tmp_pcm_path)
+            except:
+                pass

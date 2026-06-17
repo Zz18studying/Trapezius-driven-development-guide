@@ -6,6 +6,7 @@ FastAPI主入口
 
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,16 +16,17 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from routers import chat, health, voice, admin
+from routers import chat, health, voice
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
 
 
-# ==================== 生命周期管理（启动预热） ====================
+# ==================== 生命周期管理 ====================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    启动时自动预热模型，避免首次请求卡顿
+    启动时：预热模型 + 清理旧音频
+    关闭时：清理资源
     """
     print("=" * 60)
     print(f"🚀 {config.API_TITLE} 启动中...")
@@ -32,12 +34,29 @@ async def lifespan(app: FastAPI):
     print(f"   文档: http://{config.API_HOST}:{config.API_PORT}/docs")
     print("=" * 60)
 
-    # ====== 预热模型 ======
-    print("\n🔥 正在预热模型，首次访问将不再卡顿...")
+    # ====== 1. 清理旧音频文件 ======
+    print("\n🗑️ 清理旧音频文件...")
+    audio_dir = "/var/www/Trapezius-driven-development-guide/backend/audio"
+    if os.path.exists(audio_dir):
+        now = time.time()
+        deleted = 0
+        for filename in os.listdir(audio_dir):
+            filepath = os.path.join(audio_dir, filename)
+            if os.path.isfile(filepath) and filename.endswith('.mp3'):
+                # 删除1小时以上的旧文件
+                if now - os.path.getmtime(filepath) > 3600:
+                    try:
+                        os.remove(filepath)
+                        deleted += 1
+                    except Exception as e:
+                        print(f"   ⚠️ 删除失败: {filename} - {e}")
+        print(f"   ✅ 清理了 {deleted} 个旧音频文件")
+    else:
+        print(f"   ℹ️ 音频目录不存在，跳过清理")
 
-    # 1. 预热 RAG 服务
+    # ====== 2. 预热 RAG 服务 ======
+    print("\n🔥 预热 RAG 服务...")
     try:
-        print("   📚 加载 RAG 知识库...")
         rag = get_rag_service()
         if rag.is_ready():
             print(f"   ✅ RAG 服务预热完成 (共 {rag.collection.count()} 条知识)")
@@ -46,9 +65,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"   ❌ RAG 预热失败: {e}")
 
-    # 2. 预热 LLM 服务
+    # ====== 3. 预热 LLM 服务 ======
+    print("\n🔥 预热 LLM 服务...")
     try:
-        print("   🤖 加载 LLM 模型...")
         llm = get_llm_service()
         if llm.is_ready():
             print("   🔄 发送预热请求...")
@@ -82,10 +101,18 @@ app = FastAPI(
 )
 
 
-# ==================== CORS 配置（允许域名访问） ====================
+# ==================== CORS 配置 ====================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有来源
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8080",
+        "https://lingshanai.cn",
+        "http://lingshanai.cn",
+        "https://www.lingshanai.cn",
+        "http://www.lingshanai.cn",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -102,7 +129,7 @@ app.mount("/audio", StaticFiles(directory=audio_dir), name="audio")
 app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(voice.router)
-app.include_router(admin.router)
+
 
 # ==================== 根路径 ====================
 @app.get("/")
@@ -122,5 +149,5 @@ if __name__ == "__main__":
         "main:app",
         host=config.API_HOST,
         port=config.API_PORT,
-        reload=True
+        reload=False
     )
