@@ -15,18 +15,19 @@
             align-items: center;
             padding: 20px;
         }
-        .chat-container {
+        .main-container {
             width: 100%;
-            max-width: 800px;
+            max-width: 1200px;
             background: rgba(255,255,255,0.95);
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             overflow: hidden;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             height: 90vh;
-            max-height: 700px;
+            max-height: 750px;
         }
+        .chat-container { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #eee; }
         .chat-header {
             background: #4a6741;
             color: white;
@@ -34,20 +35,10 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
+            flex-shrink: 0;
         }
-        .chat-header .title {
-            font-size: 18px;
-            font-weight: bold;
-            white-space: nowrap;
-        }
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+        .chat-header .title { font-size: 18px; font-weight: bold; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
         .session-id-display {
             font-size: 11px;
             color: rgba(255,255,255,0.85);
@@ -55,15 +46,11 @@
             padding: 4px 10px;
             border-radius: 12px;
             cursor: pointer;
-            max-width: 280px;
+            max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            transition: all 0.2s;
             font-family: 'Courier New', monospace;
-        }
-        .session-id-display:hover {
-            background: rgba(0,0,0,0.4);
         }
         .clear-btn {
             background: rgba(255,255,255,0.15);
@@ -74,12 +61,9 @@
             cursor: pointer;
             font-size: 12px;
             transition: all 0.2s;
-            white-space: nowrap;
         }
-        .clear-btn:hover {
-            background: rgba(255,80,80,0.3);
-            border-color: rgba(255,80,80,0.5);
-        }
+        .clear-btn:hover { background: rgba(255,80,80,0.3); border-color: rgba(255,80,80,0.5); }
+
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -88,19 +72,10 @@
             flex-direction: column;
             gap: 15px;
         }
-        .message {
-            display: flex;
-            gap: 12px;
-            max-width: 80%;
-        }
-        .message.user {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
+        .message { display: flex; gap: 12px; max-width: 85%; }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
         .message-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
+            width: 36px; height: 36px; border-radius: 50%;
             background: #4a6741;
             display: flex;
             align-items: center;
@@ -117,15 +92,9 @@
             word-wrap: break-word;
             line-height: 1.5;
         }
-        .message.user .message-content {
-            background: #4a6741;
-            color: white;
-        }
-        .message-time {
-            font-size: 11px;
-            color: #999;
-            margin-top: 5px;
-        }
+        .message.user .message-content { background: #4a6741; color: white; }
+        .message-time { font-size: 11px; color: #999; margin-top: 5px; }
+
         .input-area {
             padding: 15px 20px;
             border-top: 1px solid #eee;
@@ -133,6 +102,7 @@
             gap: 12px;
             background: white;
             align-items: center;
+            flex-shrink: 0;
         }
         .input-area input {
             flex: 1;
@@ -145,9 +115,7 @@
         }
         .input-area input:focus { border-color: #4a6741; }
         .voice-btn {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
+            width: 44px; height: 44px; border-radius: 50%;
             background: #f0f0f0;
             border: 1px solid #ddd;
             cursor: pointer;
@@ -160,20 +128,12 @@
             user-select: none;
         }
         .voice-btn:hover { background: #e0e0e0; }
-        .voice-btn.recording {
-            background: #ff6b6b;
-            color: white;
-            transform: scale(1.1);
-            animation: pulse 0.5s infinite alternate;
-        }
+        .voice-btn.recording { background: #ff6b6b; color: white; transform: scale(1.1); animation: pulse 0.5s infinite alternate; }
         @keyframes pulse {
             from { transform: scale(1.05); }
             to { transform: scale(1.15); }
         }
-        .voice-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .voice-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .send-btn {
             background: #4a6741;
             color: white;
@@ -186,38 +146,18 @@
         }
         .send-btn:hover { background: #5a7e51; }
         .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .loading-dots span {
+
+        .typing-dots span {
             animation: blink 1.4s infinite;
             display: inline-block;
         }
-        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink {
             0%, 60%, 100% { opacity: 0.4; }
             30% { opacity: 1; }
         }
-        .speaking-indicator {
-            display: none;
-            font-size: 12px;
-            color: #4a6741;
-            margin-left: 10px;
-            animation: pulse2 1s infinite;
-        }
-        .speaking-indicator.active {
-            display: inline-block;
-        }
-        @keyframes pulse2 {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        .assistant .message-content {
-            display: flex;
-            flex-direction: column;
-        }
-        .assistant .message-content .speaking-indicator {
-            margin-left: 0;
-            margin-top: 5px;
-        }
+
         .recording-tip {
             position: fixed;
             top: 50%;
@@ -233,94 +173,132 @@
             pointer-events: none;
             backdrop-filter: blur(10px);
         }
-        .recording-tip.active {
+        .recording-tip.active { display: block; }
+
+        .digital-human-wrapper {
+            width: 380px;
+            background: #1a3c1a;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .dh-header {
+            background: rgba(0,0,0,0.4);
+            color: #ffd700;
+            padding: 12px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            flex-shrink: 0;
+            letter-spacing: 2px;
+        }
+        .dh-canvas-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        .dh-canvas-wrapper canvas {
+            width: 100%;
+            height: 100%;
             display: block;
         }
-        @media (max-width: 600px) {
-            .chat-header .title { font-size: 16px; }
-            .session-id-display { max-width: 120px; font-size: 10px; }
-            .message { max-width: 95%; }
+        .dh-status {
+            position: absolute;
+            bottom: 15px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+            background: rgba(0,0,0,0.4);
+            padding: 6px;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; height: auto; max-height: none; }
+            .chat-container { border-right: none; border-bottom: 1px solid #eee; height: 60vh; }
+            .digital-human-wrapper { width: 100%; height: 50vh; min-height: 300px; }
+            .session-id-display { max-width: 100px; font-size: 10px; }
+        }
+        @media (max-width: 480px) {
+            .chat-header .title { font-size: 15px; }
+            .digital-human-wrapper { height: 40vh; min-height: 250px; }
+            .input-area input { font-size: 14px; padding: 10px 14px; }
+            .send-btn { padding: 10px 16px; font-size: 14px; }
+            .voice-btn { width: 38px; height: 38px; font-size: 18px; }
         }
     </style>
+    <!-- Live2D + PixiJS 库 -->
+    <script src="/digital-human-test/lib/pixi.min.js"></script>
+    <script src="/digital-human-test/lib/live2dcubismcore.min.js"></script>
+    <script src="/digital-human-test/lib/cubism4.min.js"></script>
 </head>
 <body>
-    <!-- 录音提示浮层 -->
+
     <div class="recording-tip" id="recordingTip">🎙️ 正在录音...</div>
 
-    <div class="chat-container">
-        <div class="chat-header">
-            <span class="title">🏯 灵山胜境 AI导游</span>
-            <div class="header-right">
-                <span class="session-id-display" id="sessionDisplay" title="点击复制完整ID">📋 加载中...</span>
-                <button class="clear-btn" id="clearSessionBtn">🗑️ 清空记忆</button>
-            </div>
-        </div>
-        <div class="chat-messages" id="chatMessages">
-            <div class="message assistant">
-                <div class="message-avatar">🤖</div>
-                <div class="message-content">
-                    您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？
-                    <div class="message-time">刚刚</div>
+    <div class="main-container">
+        <!-- 左侧：对话区域 -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <span class="title">🏯 灵山胜境 AI导游</span>
+                <div class="header-right">
+                    <span class="session-id-display" id="sessionDisplay" title="点击复制">📋</span>
+                    <button class="clear-btn" id="clearSessionBtn">🗑️ 清空</button>
                 </div>
             </div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？
+                        <div class="message-time">刚刚</div>
+                    </div>
+                </div>
+            </div>
+            <div class="input-area">
+                <button class="voice-btn" id="voiceBtn" title="按住说话">🎤</button>
+                <input type="text" id="messageInput" placeholder="输入问题或按住🎤说话..." autocomplete="off">
+                <button class="send-btn" id="sendBtn">发送</button>
+            </div>
         </div>
-        <div class="input-area">
-            <button class="voice-btn" id="voiceBtn" title="按住说话">🎤</button>
-            <input type="text" id="messageInput" placeholder="输入问题或按住🎤说话..." autocomplete="off">
-            <button class="send-btn" id="sendBtn">发送</button>
+
+        <!-- 右侧：数字人区域 -->
+        <div class="digital-human-wrapper">
+            <div class="dh-header">🎭 小灵 · AI导游</div>
+            <div class="dh-canvas-wrapper" id="dhContainer">
+                <canvas id="live2dCanvas"></canvas>
+                <div class="dh-status" id="dhStatus">⏳ 加载中...</div>
+            </div>
         </div>
     </div>
 
     <script>
-        // ========== 生成会话ID ==========
+        // ============================================================
+        // 1. 会话管理
+        // ============================================================
         function generateSessionId() {
             return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
         }
-
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
             sessionId = generateSessionId();
             localStorage.setItem('sessionId', sessionId);
         }
+        document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId.substring(0, 12) + '…';
 
-        // ========== 显示完整 sessionId（带点击复制） ==========
-        const sessionDisplay = document.getElementById('sessionDisplay');
-        sessionDisplay.textContent = '📋 ' + sessionId;
-        sessionDisplay.title = '点击复制完整ID';
-
-        sessionDisplay.addEventListener('click', function() {
-            navigator.clipboard.writeText(sessionId).then(() => {
-                this.textContent = '✅ 已复制!';
-                setTimeout(() => {
-                    this.textContent = '📋 ' + sessionId;
-                }, 1500);
-            }).catch(() => {
-                // 降级方案
-                const input = document.createElement('input');
-                input.value = sessionId;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                input.remove();
-                this.textContent = '✅ 已复制!';
-                setTimeout(() => {
-                    this.textContent = '📋 ' + sessionId;
-                }, 1500);
-            });
-        });
-
-        console.log('📋 会话ID:', sessionId);
-
-        // ========== 配置 ==========
-        const API_BASE = 'https://lingshanai.cn';
-        const MAX_RECORD_TIME = 10000;
-
-        // ========== DOM 元素 ==========
+        // ============================================================
+        // 2. DOM 引用
+        // ============================================================
         const chatMessages = document.getElementById('chatMessages');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
         const voiceBtn = document.getElementById('voiceBtn');
         const recordingTip = document.getElementById('recordingTip');
+        const dhStatus = document.getElementById('dhStatus');
 
         let isWaiting = false;
         let currentAudio = null;
@@ -329,22 +307,18 @@
         let isRecording = false;
         let recordTimer = null;
 
-        // ========== 消息渲染 ==========
+        // ============================================================
+        // 3. 对话功能
+        // ============================================================
         function addMessage(content, role) {
             const div = document.createElement('div');
             div.className = `message ${role}`;
             const avatar = role === 'user' ? '👤' : '🤖';
             const time = new Date().toLocaleTimeString();
-
-            let contentHtml = escapeHtml(content);
-            if (role === 'assistant') {
-                contentHtml += `<span class="speaking-indicator" id="speakingIndicator">🔊 播放中...</span>`;
-            }
-
             div.innerHTML = `
                 <div class="message-avatar">${avatar}</div>
                 <div class="message-content">
-                    ${contentHtml}
+                    ${escapeHtml(content)}
                     <div class="message-time">${time}</div>
                 </div>
             `;
@@ -366,7 +340,7 @@
             div.innerHTML = `
                 <div class="message-avatar">🤖</div>
                 <div class="message-content">
-                    <span class="loading-dots"><span>●</span><span>●</span><span>●</span></span>
+                    <span class="typing-dots"><span>●</span><span>●</span><span>●</span></span>
                 </div>
             `;
             chatMessages.appendChild(div);
@@ -378,60 +352,9 @@
             if (el) el.remove();
         }
 
-        function showSpeakingIndicator() {
-            const el = document.getElementById('speakingIndicator');
-            if (el) el.classList.add('active');
-        }
-
-        function hideSpeakingIndicator() {
-            const el = document.getElementById('speakingIndicator');
-            if (el) el.classList.remove('active');
-        }
-
-        // ========== 语音播报 ==========
-        async function speakText(text) {
-            if (!text) return;
-            showSpeakingIndicator();
-
-            try {
-                const res = await fetch(`${API_BASE}/api/voice/tts`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text, voice_type: 0 })
-                });
-                const data = await res.json();
-
-                if (data.success && data.audio_url) {
-                    if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio = null;
-                    }
-                    const audio = new Audio(data.audio_url);
-                    currentAudio = audio;
-                    audio.onplay = () => showSpeakingIndicator();
-                    audio.onended = () => {
-                        hideSpeakingIndicator();
-                        currentAudio = null;
-                    };
-                    audio.onerror = () => {
-                        console.error('音频播放失败');
-                        hideSpeakingIndicator();
-                        currentAudio = null;
-                    };
-                    audio.play().catch(err => {
-                        console.error('播放失败:', err);
-                        hideSpeakingIndicator();
-                    });
-                } else {
-                    hideSpeakingIndicator();
-                }
-            } catch (err) {
-                console.error('语音播报请求失败:', err);
-                hideSpeakingIndicator();
-            }
-        }
-
-        // ========== 发送消息 ==========
+        // ============================================================
+        // 4. 发送消息（驱动数字人）
+        // ============================================================
         async function sendMessage(question) {
             if (!question) {
                 question = messageInput.value.trim();
@@ -446,7 +369,7 @@
             showTyping();
 
             try {
-                const res = await fetch(`${API_BASE}/api/chat/ask`, {
+                const res = await fetch(`/api/chat/ask`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -461,7 +384,10 @@
 
                 if (data.success) {
                     addMessage(data.answer, 'assistant');
-                    await speakText(data.answer);
+                    // 驱动数字人说话
+                    if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
+                        await window.digitalHuman.speak(data.answer);
+                    }
                 } else {
                     addMessage('抱歉，服务暂时不可用。', 'assistant');
                 }
@@ -477,38 +403,31 @@
             }
         }
 
-        // ========== 语音输入 ==========
+        // ============================================================
+        // 5. 语音输入（ASR）
+        // ============================================================
         async function startRecording() {
             if (isRecording || isWaiting) return;
-
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
-
                 mediaRecorder.ondataavailable = (e) => {
                     if (e.data.size > 0) audioChunks.push(e.data);
                 };
-
                 mediaRecorder.onstop = async () => {
                     const blob = new Blob(audioChunks, { type: 'audio/mp3' });
                     stream.getTracks().forEach(t => t.stop());
                     recordingTip.classList.remove('active');
-
-                    if (blob.size > 0) {
-                        await recognizeAndSend(blob);
-                    }
+                    if (blob.size > 0) await recognizeAndSend(blob);
                 };
-
                 mediaRecorder.start();
                 isRecording = true;
                 voiceBtn.classList.add('recording');
                 recordingTip.classList.add('active');
-
                 recordTimer = setTimeout(() => {
                     if (isRecording) stopRecording();
-                }, MAX_RECORD_TIME);
-
+                }, 10000);
             } catch (err) {
                 console.error('录音失败:', err);
                 alert('无法访问麦克风，请检查权限');
@@ -530,14 +449,9 @@
         async function recognizeAndSend(blob) {
             const formData = new FormData();
             formData.append('audio', blob, 'speech.mp3');
-
             try {
-                const res = await fetch(`${API_BASE}/api/voice/asr`, {
-                    method: 'POST',
-                    body: formData
-                });
+                const res = await fetch(`/api/voice/asr`, { method: 'POST', body: formData });
                 const data = await res.json();
-
                 if (data.success && data.text) {
                     await sendMessage(data.text);
                 } else {
@@ -549,54 +463,213 @@
             }
         }
 
-        // ========== 清空记忆 ==========
-        document.getElementById('clearSessionBtn').addEventListener('click', async function() {
-            if (confirm('确定要清空对话记忆吗？这将开始一个全新的对话。')) {
-                const oldId = sessionId;
-                console.log('🔄 清空前 sessionId:', oldId);
+        // ============================================================
+        // 6. 数字人控制模块（确定方案）
+        // ============================================================
+        const DigitalHuman = {
+            app: null,
+            model: null,
+            isReady: false,
+            isSpeaking: false,
+            _animationId: null,
+            _audioContext: null,
+
+            async init() {
+                const container = document.getElementById('dhContainer');
+                const canvas = document.getElementById('live2dCanvas');
+                const width = container.clientWidth || 380;
+                const height = container.clientHeight || 500;
 
                 try {
-                    // 调用后端清空
-                    await fetch(`${API_BASE}/api/chat/clear?session_id=${sessionId}`, {
-                        method: 'POST'
+                    this.app = new PIXI.Application({
+                        view: canvas,
+                        width: width,
+                        height: height,
+                        backgroundColor: 0x1a3c1a,
+                        resolution: window.devicePixelRatio || 1,
+                        autoDensity: true
                     });
 
-                    // 生成新ID
-                    sessionId = generateSessionId();
-                    localStorage.setItem('sessionId', sessionId);
+                    const modelPath = '/models/shizuku/runtime/shizuku.model3.json';
+                    this.model = await PIXI.live2d.Live2DModel.from(modelPath);
+                    this.app.stage.addChild(this.model);
 
-                    console.log('🔄 清空后 sessionId:', sessionId);
-                    console.log('✅ ID已变化:', oldId !== sessionId);
+                    this.model.anchor.set(0.5, 0.5);
+                    this.model.x = this.app.screen.width / 2;
+                    this.model.y = this.app.screen.height / 2;
+                    this.model.scale.set(0.38, 0.38);
 
-                    // 更新显示
-                    sessionDisplay.textContent = '📋 ' + sessionId;
-                    sessionDisplay.title = '点击复制完整ID';
+                    // 播放待机动作
+                    try { this.model.motion('Idle'); } catch(e) {}
 
-                    // 清空聊天记录
-                    chatMessages.innerHTML = '';
-                    addMessage('您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？', 'assistant');
-                    addMessage('🔄 对话记忆已清空，新会话ID: ' + sessionId, 'assistant');
+                    this.isReady = true;
+                    dhStatus.textContent = '✅ 已就绪';
+                    console.log('✅ 数字人加载成功');
+
+                    window.addEventListener('resize', () => this.resize());
 
                 } catch (err) {
-                    console.error('清空会话失败:', err);
+                    console.error('数字人加载失败:', err);
+                    dhStatus.textContent = '❌ 加载失败';
+                }
+            },
+
+            resize() {
+                if (!this.app || !this.model) return;
+                const container = document.getElementById('dhContainer');
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                this.app.renderer.resize(width, height);
+                this.model.x = this.app.screen.width / 2;
+                this.model.y = this.app.screen.height / 2;
+                const scale = Math.min(width, height) / 1000;
+                this.model.scale.set(scale * 0.38, scale * 0.38);
+            },
+
+            // 🔥 确定方案：停止动作 + 手动驱动口型
+            async speak(text) {
+                if (!this.isReady || !text || this.isSpeaking) return;
+
+                // 1. 停止所有动作（解决重复动作问题）
+                try {
+                    if (this.model.internalModel && this.model.internalModel.motionManager) {
+                        this.model.internalModel.motionManager.stopAllMotions();
+                    }
+                    if (typeof this.model.stopAllMotions === 'function') {
+                        this.model.stopAllMotions();
+                    }
+                } catch(e) {
+                    console.log('停止动作失败:', e);
+                }
+
+                this.isSpeaking = true;
+                dhStatus.textContent = '🔊 合成语音...';
+
+                try {
+                    const res = await fetch(`/api/voice/tts`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text, voice_type: 0 })
+                    });
+                    const data = await res.json();
+
+                    if (!data.success || !data.audio_url) {
+                        dhStatus.textContent = '❌ 合成失败';
+                        this.isSpeaking = false;
+                        try { this.model.motion('Idle'); } catch(e) {}
+                        return;
+                    }
+
+                    // 2. 播放音频 + 手动驱动口型（解决口型对不上问题）
+                    const audio = new Audio(data.audio_url);
+                    this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = this._audioContext.createMediaElementSource(audio);
+                    const analyser = this._audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    source.connect(analyser);
+                    analyser.connect(this._audioContext.destination);
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                    const updateMouth = () => {
+                        if (!this.model || audio.paused || audio.ended) {
+                            try { this.model.internalModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', 0); } catch(e) {}
+                            if (this._animationId) {
+                                cancelAnimationFrame(this._animationId);
+                                this._animationId = null;
+                            }
+                            return;
+                        }
+                        analyser.getByteFrequencyData(dataArray);
+                        let sum = 0;
+                        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+                        const mouthOpen = Math.min(sum / dataArray.length / 128, 1);
+                        try { this.model.internalModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', mouthOpen); } catch(e) {}
+                        this._animationId = requestAnimationFrame(updateMouth);
+                    };
+
+                    audio.onplay = () => {
+                        dhStatus.textContent = '🎤 说话中...';
+                        updateMouth();
+                    };
+
+                    audio.onended = () => {
+                        try { this.model.internalModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', 0); } catch(e) {}
+                        if (this._animationId) {
+                            cancelAnimationFrame(this._animationId);
+                            this._animationId = null;
+                        }
+                        this.isSpeaking = false;
+                        dhStatus.textContent = '✅ 已就绪';
+                        try { this.model.motion('Idle'); } catch(e) {}
+                        if (this._audioContext) {
+                            this._audioContext.close();
+                            this._audioContext = null;
+                        }
+                    };
+
+                    audio.onerror = () => {
+                        this.isSpeaking = false;
+                        dhStatus.textContent = '⚠️ 播放失败';
+                        try { this.model.motion('Idle'); } catch(e) {}
+                        if (this._audioContext) {
+                            this._audioContext.close();
+                            this._audioContext = null;
+                        }
+                    };
+
+                    audio.play().catch(err => {
+                        console.error('播放失败:', err);
+                        this.isSpeaking = false;
+                        dhStatus.textContent = '⚠️ 播放失败';
+                        try { this.model.motion('Idle'); } catch(e) {}
+                        if (this._audioContext) {
+                            this._audioContext.close();
+                            this._audioContext = null;
+                        }
+                    });
+
+                } catch (err) {
+                    console.error('说话失败:', err);
+                    dhStatus.textContent = '❌ 说话失败';
+                    this.isSpeaking = false;
+                    try { this.model.motion('Idle'); } catch(e) {}
+                }
+            }
+        };
+
+        // ============================================================
+        // 7. 清空会话
+        // ============================================================
+        document.getElementById('clearSessionBtn').addEventListener('click', async function() {
+            if (confirm('确定要清空对话记忆吗？')) {
+                try {
+                    await fetch(`/api/chat/clear?session_id=${sessionId}`, { method: 'POST' });
+                    sessionId = generateSessionId();
+                    localStorage.setItem('sessionId', sessionId);
+                    document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId.substring(0, 12) + '…';
+                    chatMessages.innerHTML = '';
+                    addMessage('您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？', 'assistant');
+                    addMessage('🔄 对话已清空，新会话ID: ' + sessionId, 'assistant');
+                } catch (err) {
+                    console.error('清空失败:', err);
                     alert('清空失败，请重试');
                 }
             }
         });
 
-        // ========== 事件绑定 ==========
+        // ============================================================
+        // 8. 事件绑定
+        // ============================================================
         sendBtn.onclick = () => {
             const text = messageInput.value.trim();
             if (text) sendMessage(text);
         };
-
         messageInput.onkeypress = (e) => {
             if (e.key === 'Enter') {
                 const text = messageInput.value.trim();
                 if (text) sendMessage(text);
             }
         };
-
         voiceBtn.addEventListener('mousedown', startRecording);
         voiceBtn.addEventListener('mouseup', stopRecording);
         voiceBtn.addEventListener('mouseleave', stopRecording);
@@ -610,14 +683,21 @@
         });
         voiceBtn.addEventListener('touchcancel', stopRecording);
 
+        // ============================================================
+        // 9. 启动
+        // ============================================================
+        window.digitalHuman = DigitalHuman;
+
+        // 先初始化数字人
+        DigitalHuman.init();
+
         messageInput.focus();
 
         console.log('✅ 灵山胜境AI导游已加载');
-        console.log(`📡 API地址: ${API_BASE}/api/chat/ask`);
+        console.log('📡 API地址: /api/chat/ask');
         console.log(`📋 会话ID: ${sessionId}`);
         console.log('🎤 按住语音按钮说话');
-        console.log('💡 多轮对话已启用，AI会记住上下文');
-        console.log('📋 点击会话ID可以复制');
+        console.log('💡 多轮对话已启用');
     </script>
 </body>
 </html>
