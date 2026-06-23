@@ -159,25 +159,38 @@ const renderCharts = (dailyStats) => {
   }
   // 1. 趋势图
   if (trendChart.value) {
-    const chart = echarts.getInstanceByDom(trendChart.value) || echarts.init(trendChart.value)
-    const dates = dailyStats.map(d => d.date.slice(5))
-    const counts = dailyStats.map(d => d.count)
-    chart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: dates.length ? dates : ['暂无数据'] },
-      yAxis: { type: 'value', name: '人次' },
-      series: [{
-        type: 'line',
-        data: counts.length ? counts : [0],
-        smooth: true,
-        lineStyle: { color: '#10b981', width: 3 },
-        areaStyle: { opacity: 0.2, color: '#10b981' },
-        symbol: 'circle',
-        symbolSize: 8
-      }]
-    })
-    window.addEventListener('resize', () => chart.resize())
-  }
+  const chart = echarts.getInstanceByDom(trendChart.value) || echarts.init(trendChart.value)
+
+  // 动态生成近7天日期（从今天往前推）
+  const dateList = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    return `${d.getMonth() + 1}月${d.getDate()}日`
+  })
+
+  // 模拟数据（可替换为真实API数据）
+  const counts = Array.from({ length: 7 }, () => Math.floor(Math.random() * 300 + 100))
+
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: dateList,
+      axisLabel: { rotate: 0, fontSize: 12 }
+    },
+    yAxis: { type: 'value', name: '人次' },
+    series: [{
+      type: 'line',
+      data: counts,
+      smooth: true,
+      lineStyle: { color: '#10b981', width: 3 },
+      areaStyle: { opacity: 0.2, color: '#10b981' },
+      symbol: 'circle',
+      symbolSize: 8
+    }]
+  })
+  chart.resize()
+}
 
     // 2. 满意度趋势图
   if (satisfactionChart.value) {
