@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI导游 · 灵山胜境</title>
+    <style>
+        /* ========== 全局重置 ========== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #eef4f8;
+            color: #1a2a3a;
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* ========== 左侧导航栏 ========== */
+        .sidebar {
+            width: 180px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a3a4a 0%, #2c6e8a 60%, #3a8aaa 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            padding: 28px 0 20px;
+        }
+        .sidebar-brand {
+            text-align: center;
+            padding: 0 16px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .sidebar-brand .icon { font-size: 36px; display: block; margin-bottom: 6px; }
+        .sidebar-brand h1 { font-size: 20px; font-weight: 700; letter-spacing: 3px; }
+        .sidebar-brand p { font-size: 12px; opacity: 0.7; letter-spacing: 4px; margin-top: 2px; }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 20px 12px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .sidebar-nav a:hover { background: rgba(255, 255, 255, 0.12); color: white; }
+        .sidebar-nav a.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .sidebar-nav a .nav-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+        .sidebar-nav a .nav-label { font-size: 14px; }
+        .sidebar-nav a .nav-badge {
+            margin-left: auto;
+            font-size: 10px;
+            background: rgba(255, 215, 0, 0.3);
+            color: #ffd700;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .sidebar-footer {
+            padding: 16px 20px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11px;
+            opacity: 0.5;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        /* ========== 右侧主内容 ========== */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 24px 24px;
+            max-width: calc(100% - 180px);
+            height: 100vh;
+        }
+
+        /* ========== 顶部标题栏 ========== */
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(44, 110, 138, 0.1);
+            flex-shrink: 0;
+        }
+        .chat-header .title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a3a4a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .chat-header .title small {
+            font-size: 14px;
+            font-weight: 400;
+            color: #6a8a9a;
+        }
+        .chat-header .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .chat-header .session-id {
+            font-size: 12px;
+            color: #6a8a9a;
+            background: white;
+            padding: 4px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(44, 110, 138, 0.1);
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: clip;
+            white-space: nowrap;
+        }
+        .chat-header .session-id:hover {
+            background: #f0f6fa;
+        }
+        .chat-header .clear-btn {
+            background: rgba(44, 110, 138, 0.08);
+            border: none;
+            color: #4a6a7a;
+            padding: 4px 14px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .chat-header .clear-btn:hover {
+            background: rgba(255, 80, 80, 0.15);
+            color: #e74c3c;
+        }
+
+        /* ========== 双栏布局：对话 + 数字人 ========== */
+        .chat-body {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            padding-top: 16px;
+            min-height: 0;
+        }
+
+        /* 左侧对话区域 */
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 16px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            min-width: 0;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .message { display: flex; gap: 10px; max-width: 85%; }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 2px 8px rgba(74, 144, 176, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+        }
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #4a90b0, #5ba3c7);
+        }
+        .message.assistant .message-avatar .avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #6bb5d9, #4a90b0);
+            color: white;
+        }
+        .message-content {
+            background: white;
+            padding: 10px 16px;
+            border-radius: 16px;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(200, 220, 235, 0.3);
+        }
+        .message.user .message-content {
+            background: linear-gradient(135deg, #5ba3c7, #4a90b0);
+            color: white;
+            border: none;
+        }
+        .message-time { font-size: 10px; color: #a0b8c8; margin-top: 4px; }
+        .message.user .message-time { color: rgba(255, 255, 255, 0.7); }
+
+        .typing-dots span {
+            animation: blink 1.4s infinite;
+            display: inline-block;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+
+        .input-area {
+            padding: 12px 16px;
+            border-top: 1px solid rgba(180, 210, 230, 0.3);
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.6);
+            flex-shrink: 0;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid rgba(180, 210, 230, 0.4);
+            border-radius: 22px;
+            font-size: 14px;
+            outline: none;
+            background: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s;
+        }
+        .input-area input:focus {
+            border-color: #5ba3c7;
+            box-shadow: 0 0 0 3px rgba(91, 163, 199, 0.12);
+        }
+        .input-area input::placeholder { color: #a0b8c8; }
+        .input-area .voice-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(180, 210, 230, 0.4);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .input-area .voice-btn:hover {
+            background: rgba(91, 163, 199, 0.08);
+            border-color: #5ba3c7;
+        }
+        .input-area .voice-btn.recording {
+            background: #ff6b6b;
+            color: white;
+            border-color: #ff6b6b;
+            animation: pulse 0.5s infinite alternate;
+        }
+        @keyframes pulse {
+            from { transform: scale(1.05); box-shadow: 0 0 0 0 rgba(255,107,107,0.3); }
+            to { transform: scale(1.12); box-shadow: 0 0 16px 4px rgba(255,107,107,0.15); }
+        }
+        .input-area .send-btn {
+            background: linear-gradient(135deg, #5ba3c7, #4a90b0);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 22px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            flex-shrink: 0;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(74, 144, 176, 0.25);
+        }
+        .input-area .send-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(74, 144, 176, 0.3);
+        }
+        .input-area .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 右侧数字人 */
+        .digital-panel {
+            width: 420px;
+            flex-shrink: 0;
+            background: linear-gradient(160deg, #dceef7 0%, #b8d8e8 50%, #c8e4f0 100%);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+        .digital-panel .dh-header {
+            background: rgba(255, 255, 255, 0.15);
+            color: #3a7a9a;
+            padding: 10px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            flex-shrink: 0;
+            letter-spacing: 2px;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .digital-panel .dh-canvas-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        .digital-panel .dh-canvas-wrapper canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .digital-panel .dh-status {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: rgba(50, 100, 130, 0.7);
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.6);
+            padding: 4px 14px;
+            border-radius: 14px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* ========== 录音提示浮层 ========== */
+        .recording-tip {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 16px;
+            font-size: 17px;
+            z-index: 999;
+            display: none;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .recording-tip.active { display: block; }
+
+        /* ========== 响应式 ========== */
+        @media (max-width: 1024px) {
+            .digital-panel { width: 280px; }
+        }
+        @media (max-width: 820px) {
+            .sidebar { width: 64px; padding: 16px 0 12px; }
+            .sidebar-brand h1, .sidebar-brand p, .sidebar-nav a .nav-label, .sidebar-nav a .nav-badge, .sidebar-footer { display: none; }
+            .sidebar-brand .icon { font-size: 28px; margin-bottom: 0; }
+            .sidebar-nav a { justify-content: center; padding: 12px; }
+            .sidebar-nav a .nav-icon { font-size: 22px; width: auto; }
+            .main-content { padding: 14px; max-width: calc(100% - 64px); }
+            .chat-body { flex-direction: column; }
+            .digital-panel { width: 100%; height: 300px; }
+            .chat-header .title { font-size: 16px; }
+            .chat-header .session-id { max-width: 120px; font-size: 10px; }
+        }
+        @media (max-width: 480px) {
+            .sidebar { width: 52px; padding: 12px 0 10px; }
+            .sidebar-brand .icon { font-size: 22px; }
+            .sidebar-nav a { padding: 10px; }
+            .sidebar-nav a .nav-icon { font-size: 18px; }
+            .main-content { padding: 10px; max-width: calc(100% - 52px); }
+            .chat-header .title { font-size: 14px; }
+            .chat-header .session-id { max-width: 80px; font-size: 9px; }
+            .chat-messages { padding: 12px 14px; }
+            .message { max-width: 92%; }
+            .digital-panel { height: 220px; }
+        }
+    </style>
+    <!-- Live2D 库（已移到 web/lib/） -->
+    <script src="lib/pixi.min.js"></script>
+    <script src="lib/live2dcubismcore.min.js"></script>
+    <script src="lib/cubism4.min.js"></script>
+</head>
+<body>
+
+    <!-- ===== 左侧导航栏 ===== -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <span class="icon">🏯</span>
+            <h1>灵山胜境</h1>
+            <p>智慧导览</p>
+        </div>
+        <div class="sidebar-nav">
+            <a href="index.html" id="navHome">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </a>
+            <a href="chat.html" id="navChat" class="active">
+                <span class="nav-icon">🎭</span>
+                <span class="nav-label">AI导游</span>
+                <span class="nav-badge">NEW</span>
+            </a>
+            <a href="routes.html" id="navRoutes">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-label">路线推荐</span>
+            </a>
+            <a href="spots.html" id="navSpots">
+                <span class="nav-icon">📍</span>
+                <span class="nav-label">景点列表</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">v2.0 · 智慧灵山</div>
+    </nav>
+
+    <!-- ===== 主内容区 ===== -->
+    <div class="main-content">
+
+        <!-- 顶部标题栏 -->
+        <div class="chat-header">
+            <div class="title">
+                🎭 AI导游
+                <small>· 小灵</small>
+            </div>
+            <div class="header-right">
+                <span class="session-id" id="sessionDisplay" title="点击复制">📋</span>
+                <button class="clear-btn" id="clearSessionBtn">🗑️ 清空</button>
+            </div>
+        </div>
+
+        <!-- 双栏主体 -->
+        <div class="chat-body">
+
+            <!-- 对话面板 -->
+            <div class="chat-panel">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message assistant">
+                        <div class="message-avatar">
+                            <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
+                        </div>
+                        <div class="message-content">
+                            您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？
+                            <div class="message-time">刚刚</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <button class="voice-btn" id="voiceBtn" title="按住说话">🎤</button>
+                    <input type="text" id="messageInput" placeholder="输入问题或按住🎤说话..." autocomplete="off">
+                    <button class="send-btn" id="sendBtn">发送</button>
+                </div>
+            </div>
+
+            <!-- 数字人面板 -->
+            <div class="digital-panel">
+                <div class="dh-header">🎭 小灵 · AI导游</div>
+                <div class="dh-canvas-wrapper" id="dhContainer">
+                    <canvas id="live2dCanvas"></canvas>
+                    <div class="dh-status" id="dhStatus">⏳ 加载中...</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ===== 录音提示浮层 ===== -->
+    <div class="recording-tip" id="recordingTip">
+        <span style="display:inline-block;animation:pulse 0.5s infinite alternate;">🎙️</span> 正在录音...
+    </div>
+
+    <script>
+        // ============================================================
+        // 0. 导航栏高亮（当前页面自动高亮）
+        // ============================================================
+        (function highlightNav() {
+            const current = window.location.pathname.split('/').pop() || 'index.html';
+            document.querySelectorAll('.sidebar-nav a').forEach(link => {
+                const href = link.getAttribute('href');
+                link.classList.toggle('active', href === current);
+            });
+        })();
+
+        // ============================================================
+        // 1. 会话管理
+        // ============================================================
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+        }
+        let sessionId = localStorage.getItem('sessionId');
+        if (!sessionId) {
+            sessionId = generateSessionId();
+            localStorage.setItem('sessionId', sessionId);
+        }
+        document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
+
+        // ============================================================
+        // 2. DOM 引用
+        // ============================================================
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const recordingTip = document.getElementById('recordingTip');
+        const dhStatus = document.getElementById('dhStatus');
+
+        let isWaiting = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordTimer = null;
+
+        // ============================================================
+        // 3. 对话功能
+        // ============================================================
+        function addMessage(content, role) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+
+            let avatarHTML = '';
+            if (role === 'assistant') {
+                avatarHTML = `
+                    <div class="message-avatar">
+                        <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
+                    </div>
+                `;
+            } else {
+                avatarHTML = `
+                    <div class="message-avatar">
+                        <svg viewBox="0 0 100 100" width="36" height="36">
+                            <circle cx="50" cy="35" r="20" fill="#fff" opacity="0.8"/>
+                            <circle cx="42" cy="32" rx="3" ry="4" fill="#6bb5d9"/>
+                            <circle cx="58" cy="32" rx="3" ry="4" fill="#6bb5d9"/>
+                            <circle cx="50" cy="42" r="6" fill="#e8a0a0" opacity="0.5"/>
+                            <path d="M38 55 Q50 65 62 55" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                `;
+            }
+
+            const time = new Date().toLocaleTimeString();
+            div.innerHTML = `
+                ${avatarHTML}
+                <div class="message-content">
+                    ${escapeHtml(content)}
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+            chatMessages.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return div;
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function showTyping() {
+            const div = document.createElement('div');
+            div.className = 'message assistant';
+            div.id = 'typingIndicator';
+            div.innerHTML = `
+                <div class="message-avatar">
+                    <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
+                </div>
+                <div class="message-content">
+                    <span class="typing-dots"><span>●</span><span>●</span><span>●</span></span>
+                </div>
+            `;
+            chatMessages.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function hideTyping() {
+            const el = document.getElementById('typingIndicator');
+            if (el) el.remove();
+        }
+
+        // ============================================================
+        // 4. 发送消息
+        // ============================================================
+        async function sendMessage(question) {
+            if (!question) {
+                question = messageInput.value.trim();
+            }
+            if (!question || isWaiting) return;
+
+            messageInput.value = '';
+            addMessage(question, 'user');
+            isWaiting = true;
+            sendBtn.disabled = true;
+            voiceBtn.disabled = true;
+            showTyping();
+
+            try {
+                const res = await fetch(`/api/chat/ask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        use_rag: true,
+                        n_results: 3,
+                        session_id: sessionId
+                    })
+                });
+                const data = await res.json();
+                hideTyping();
+
+                if (data.success) {
+                    addMessage(data.answer, 'assistant');
+                    if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
+                        await window.digitalHuman.speak(data.answer);
+                    }
+                } else {
+                    addMessage('抱歉，服务暂时不可用。', 'assistant');
+                }
+            } catch (err) {
+                hideTyping();
+                console.error(err);
+                addMessage('网络开小差了，请稍后再试。', 'assistant');
+            } finally {
+                isWaiting = false;
+                sendBtn.disabled = false;
+                voiceBtn.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // ============================================================
+        // 5. 语音输入
+        // ============================================================
+        async function startRecording() {
+            if (isRecording || isWaiting) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/mp3' });
+                    stream.getTracks().forEach(t => t.stop());
+                    recordingTip.classList.remove('active');
+                    if (blob.size > 0) await recognizeAndSend(blob);
+                };
+                mediaRecorder.start();
+                isRecording = true;
+                voiceBtn.classList.add('recording');
+                recordingTip.classList.add('active');
+                recordTimer = setTimeout(() => {
+                    if (isRecording) stopRecording();
+                }, 10000);
+            } catch (err) {
+                console.error('录音失败:', err);
+                alert('无法访问麦克风，请检查权限');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceBtn.classList.remove('recording');
+                if (recordTimer) {
+                    clearTimeout(recordTimer);
+                    recordTimer = null;
+                }
+            }
+        }
+
+        async function recognizeAndSend(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'speech.mp3');
+            try {
+                const res = await fetch(`/api/voice/asr`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success && data.text) {
+                    await sendMessage(data.text);
+                } else {
+                    addMessage('语音识别失败，请重试', 'assistant');
+                }
+            } catch (err) {
+                console.error('识别失败:', err);
+                addMessage('语音识别服务异常', 'assistant');
+            }
+        }
+
+        // ============================================================
+        // 6. 数字人控制模块
+        // ============================================================
+        const DigitalHuman = {
+            app: null,
+            model: null,
+            isReady: false,
+            isSpeaking: false,
+            _animationId: null,
+            _audioContext: null,
+            _currentAudio: null,
+            _mouthSmooth: 0,
+            _mouthParamIndex: -1,
+            _formParamIndex: -1,
+            _idleTimer: null,
+            _isIdle: true,
+
+            async init() {
+                const container = document.getElementById('dhContainer');
+                const canvas = document.getElementById('live2dCanvas');
+                const width = container.clientWidth || 340;
+                const height = container.clientHeight || 400;
+
+                try {
+                    this.app = new PIXI.Application({
+                        view: canvas,
+                        width: width,
+                        height: height,
+                        backgroundColor: 0xdceef7,
+                        resolution: window.devicePixelRatio || 1,
+                        autoDensity: true
+                    });
+
+                    const modelPath = '../models/hiyori_pro/runtime/hiyori_pro_t11.model3.json';
+                    console.log('📂 加载模型:', modelPath);
+                    this.model = await PIXI.live2d.Live2DModel.from(modelPath);
+                    this.app.stage.addChild(this.model);
+
+                    this.model.anchor.set(0.5, 0.5);
+                    this.model.x = this.app.screen.width / 2;
+                    this.model.y = this.app.screen.height / 2;
+                    this.model.scale.set(0.16, 0.16);
+
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    this._disableAllMotions();
+                    this._cacheParamIndices();
+                    this._resetAllParameters();
+
+                    this.isReady = true;
+                    dhStatus.textContent = '✅ 已就绪';
+                    console.log('✅ Hiyori Pro 加载成功');
+
+                    this._startIdle();
+
+                    window.addEventListener('resize', () => this.resize());
+
+                } catch (err) {
+                    console.error('数字人加载失败:', err);
+                    dhStatus.textContent = '❌ 加载失败: ' + err.message;
+                }
+            },
+
+            _disableAllMotions() {
+                try {
+                    if (!this.model || !this.model.internalModel) return;
+                    const internal = this.model.internalModel;
+                    if (internal.motionManager) {
+                        if (typeof internal.motionManager.stopAllMotions === 'function') {
+                            internal.motionManager.stopAllMotions();
+                        }
+                        if (internal.motionManager.motionGroups) {
+                            internal.motionManager.motionGroups = {};
+                        }
+                        if (internal.motionManager.state) {
+                            internal.motionManager.state.playing = false;
+                            internal.motionManager.state.currentTime = 0;
+                            internal.motionManager.state.duration = 0;
+                        }
+                        internal.motionManager._currentMotion = null;
+                        internal.motionManager._motions = [];
+                        if (internal.motionManager._queuedMotions) {
+                            internal.motionManager._queuedMotions = [];
+                        }
+                        if (internal.motionManager._onFinish) {
+                            internal.motionManager._onFinish = null;
+                        }
+                        internal.motionManager.startRandomMotion = function() {
+                            return Promise.resolve(null);
+                        };
+                        console.log('✅ motionManager 已彻底禁用');
+                    }
+                } catch(e) {
+                    console.log('禁用动作失败:', e);
+                }
+            },
+
+            _cacheParamIndices() {
+                try {
+                    if (!this.model || !this.model.internalModel) return;
+                    const coreModel = this.model.internalModel.coreModel;
+                    const paramIds = coreModel._parameterIds;
+                    for (let i = 0; i < paramIds.length; i++) {
+                        const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
+                        if (name === 'ParamMouthOpenY') {
+                            this._mouthParamIndex = i;
+                            console.log(`✅ 缓存 ParamMouthOpenY 索引: ${i}`);
+                        }
+                        if (name === 'ParamMouthForm') {
+                            this._formParamIndex = i;
+                            console.log(`✅ 缓存 ParamMouthForm 索引: ${i}`);
+                        }
+                    }
+                } catch(e) {
+                    console.warn('缓存参数索引失败:', e);
+                }
+            },
+
+            _resetAllParameters() {
+                try {
+                    if (!this.model || !this.model.internalModel) return;
+                    const coreModel = this.model.internalModel.coreModel;
+                    for (let i = 0; i < coreModel._parameterValues.length; i++) {
+                        coreModel._parameterValues[i] = 0;
+                    }
+                    coreModel.update();
+                    console.log('✅ 所有参数已重置');
+                } catch(e) {
+                    console.log('重置参数失败:', e);
+                }
+            },
+
+            _setMouth(value) {
+                try {
+                    if (!this.model || !this.model.internalModel) return;
+                    const coreModel = this.model.internalModel.coreModel;
+                    if (this._mouthParamIndex !== -1) {
+                        coreModel.setParameterValueByIndex(this._mouthParamIndex, value);
+                        coreModel._parameterValues[this._mouthParamIndex] = value;
+                    }
+                    if (this._formParamIndex !== -1) {
+                        const formValue = value > 0.3 ? -0.5 + value * 0.3 : -0.3;
+                        coreModel.setParameterValueByIndex(this._formParamIndex, formValue);
+                        coreModel._parameterValues[this._formParamIndex] = formValue;
+                    }
+                    coreModel.update();
+                } catch(e) {}
+            },
+
+            _setEye(value) {
+                try {
+                    if (!this.model || !this.model.internalModel) return;
+                    const coreModel = this.model.internalModel.coreModel;
+                    const paramIds = coreModel._parameterIds;
+                    for (let i = 0; i < paramIds.length; i++) {
+                        const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
+                        if (name === 'ParamEyeLOpen' || name === 'ParamEyeROpen') {
+                            coreModel.setParameterValueByIndex(i, value);
+                            coreModel._parameterValues[i] = value;
+                        }
+                    }
+                    coreModel.update();
+                } catch(e) {}
+            },
+
+            _setBrow(value) {
+                try {
+                    if (!this.model || !this.model.internalModel) return;
+                    const coreModel = this.model.internalModel.coreModel;
+                    const paramIds = coreModel._parameterIds;
+                    for (let i = 0; i < paramIds.length; i++) {
+                        const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
+                        if (name === 'ParamBrowLY' || name === 'ParamBrowRY') {
+                            coreModel.setParameterValueByIndex(i, value);
+                            coreModel._parameterValues[i] = value;
+                        }
+                    }
+                    coreModel.update();
+                } catch(e) {}
+            },
+
+            _startIdle() {
+                this._stopIdle();
+                this._isIdle = true;
+                const doIdleAction = () => {
+                    if (!this._isIdle || this.isSpeaking || !this.isReady) {
+                        this._idleTimer = setTimeout(doIdleAction, 3000);
+                        return;
+                    }
+                    const actions = [
+                        () => { this._setEye(1.0); setTimeout(() => this._setEye(0), 150); },
+                        () => { this._setMouth(0.3); setTimeout(() => this._setMouth(0), 2000); },
+                        () => { this._setBrow(0.5); setTimeout(() => this._setBrow(0), 1000); },
+                        () => { this._setMouth(0.2); this._setEye(0.8); setTimeout(() => { this._setMouth(0); this._setEye(0); }, 1500); }
+                    ];
+                    const action = actions[Math.floor(Math.random() * actions.length)];
+                    action();
+                    const delay = 3000 + Math.random() * 4000;
+                    this._idleTimer = setTimeout(doIdleAction, delay);
+                };
+                setTimeout(doIdleAction, 2000);
+                console.log('✅ 待机表情已启动');
+            },
+
+            _stopIdle() {
+                this._isIdle = false;
+                if (this._idleTimer) {
+                    clearTimeout(this._idleTimer);
+                    this._idleTimer = null;
+                }
+            },
+
+            resize() {
+                if (!this.app || !this.model) return;
+                try {
+                    const container = document.getElementById('dhContainer');
+                    const width = container.clientWidth;
+                    const height = container.clientHeight;
+                    this.app.renderer.resize(width, height);
+                    this.model.x = this.app.screen.width / 2;
+                    this.model.y = this.app.screen.height / 2;
+                    const scale = Math.min(width, height) / 1000;
+                    this.model.scale.set(scale * 0.16, scale * 0.16);
+                } catch(e) {}
+            },
+
+            async speak(text) {
+                if (!this.isReady || !text || !this.model) return;
+                if (this.isSpeaking) {
+                    this._stopSpeaking();
+                    await new Promise(r => setTimeout(r, 100));
+                }
+
+                this.isSpeaking = true;
+                this._isIdle = false;
+                this._stopIdle();
+                dhStatus.textContent = '🔊 合成语音...';
+
+                try {
+                    const res = await fetch(`/api/voice/tts`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text, voice_type: 0 })
+                    });
+                    const data = await res.json();
+
+                    if (!data.success || !data.audio_url) {
+                        dhStatus.textContent = '❌ 合成失败';
+                        this.isSpeaking = false;
+                        this._startIdle();
+                        return;
+                    }
+
+                    this._disableAllMotions();
+                    this._setMouth(0);
+
+                    const audio = new Audio(data.audio_url);
+                    this._currentAudio = audio;
+
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    this._audioContext = audioCtx;
+
+                    const source = audioCtx.createMediaElementSource(audio);
+                    const analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 256;
+                    source.connect(analyser);
+                    analyser.connect(audioCtx.destination);
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                    this._mouthSmooth = 0;
+                    let isActive = true;
+
+                    const updateMouth = () => {
+                        if (!isActive || !this.model || !this.model.internalModel || audio.paused || audio.ended) {
+                            this._setMouth(0);
+                            if (this._animationId) {
+                                cancelAnimationFrame(this._animationId);
+                                this._animationId = null;
+                            }
+                            return;
+                        }
+
+                        try {
+                            analyser.getByteFrequencyData(dataArray);
+                            let sum = 0;
+                            for (let i = 0; i < dataArray.length; i++) {
+                                sum += dataArray[i];
+                            }
+                            const avg = sum / dataArray.length;
+                            let mouthOpen = Math.min(avg / 128, 1.5);
+                            if (mouthOpen < 0.05) mouthOpen = 0;
+                            this._mouthSmooth = this._mouthSmooth * 0.3 + mouthOpen * 0.7;
+                            mouthOpen = this._mouthSmooth;
+                            this._setMouth(mouthOpen);
+                        } catch(e) {}
+
+                        this._animationId = requestAnimationFrame(updateMouth);
+                    };
+
+                    audio.onplay = () => {
+                        dhStatus.textContent = '🎤 说话中...';
+                        isActive = true;
+                        updateMouth();
+                    };
+
+                    audio.onended = () => {
+                        isActive = false;
+                        this._finishSpeaking();
+                    };
+
+                    audio.onerror = () => {
+                        console.error('音频播放错误');
+                        isActive = false;
+                        this._finishSpeaking();
+                    };
+
+                    await audio.play();
+
+                } catch (err) {
+                    console.error('说话失败:', err);
+                    dhStatus.textContent = '❌ 说话失败';
+                    this._finishSpeaking();
+                }
+            },
+
+            _stopSpeaking() {
+                try {
+                    if (this._currentAudio) {
+                        this._currentAudio.pause();
+                        this._currentAudio = null;
+                    }
+                    if (this._audioContext) {
+                        this._audioContext.close();
+                        this._audioContext = null;
+                    }
+                    if (this._animationId) {
+                        cancelAnimationFrame(this._animationId);
+                        this._animationId = null;
+                    }
+                    this._setMouth(0);
+                } catch(e) {}
+                this.isSpeaking = false;
+            },
+
+            _finishSpeaking() {
+                this._setMouth(0);
+                if (this._animationId) {
+                    cancelAnimationFrame(this._animationId);
+                    this._animationId = null;
+                }
+                if (this._audioContext) {
+                    try { this._audioContext.close(); } catch(e) {}
+                    this._audioContext = null;
+                }
+                this._currentAudio = null;
+                this.isSpeaking = false;
+                this._mouthSmooth = 0;
+                dhStatus.textContent = '✅ 已就绪';
+                this._disableAllMotions();
+                this._startIdle();
+            }
+        };
+
+        // ============================================================
+        // 7. 清空会话
+        // ============================================================
+        document.getElementById('clearSessionBtn').addEventListener('click', async function() {
+            if (confirm('确定要清空对话记忆吗？')) {
+                try {
+                    await fetch(`/api/chat/clear?session_id=${sessionId}`, { method: 'POST' });
+                    sessionId = generateSessionId();
+                    localStorage.setItem('sessionId', sessionId);
+                    document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
+                    chatMessages.innerHTML = '';
+                    addMessage('您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？', 'assistant');
+                    addMessage('🔄 对话已清空，新会话ID: ' + sessionId, 'assistant');
+                } catch (err) {
+                    console.error('清空失败:', err);
+                    alert('清空失败，请重试');
+                }
+            }
+        });
+
+        document.getElementById('sessionDisplay').addEventListener('click', function() {
+            navigator.clipboard.writeText(sessionId).then(() => {
+                alert('会话ID已复制: ' + sessionId);
+            }).catch(() => {
+                const input = document.createElement('input');
+                input.value = sessionId;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                alert('会话ID已复制: ' + sessionId);
+            });
+        });
+
+        // ============================================================
+        // 8. 事件绑定
+        // ============================================================
+        sendBtn.onclick = () => {
+            const text = messageInput.value.trim();
+            if (text) sendMessage(text);
+        };
+        messageInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const text = messageInput.value.trim();
+                if (text) sendMessage(text);
+            }
+        };
+        voiceBtn.addEventListener('mousedown', startRecording);
+        voiceBtn.addEventListener('mouseup', stopRecording);
+        voiceBtn.addEventListener('mouseleave', stopRecording);
+        voiceBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startRecording();
+        });
+        voiceBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopRecording();
+        });
+        voiceBtn.addEventListener('touchcancel', stopRecording);
+
+        // ============================================================
+        // 9. 启动
+        // ============================================================
+        window.digitalHuman = DigitalHuman;
+        DigitalHuman.init();
+        messageInput.focus();
+
+        console.log('🎭 AI导游页面已加载');
+        console.log('📡 API地址: /api/chat/ask');
+        console.log(`📋 会话ID: ${sessionId}`);
+    </script>
+
+</body>
+</html>

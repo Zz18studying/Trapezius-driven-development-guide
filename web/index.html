@@ -3,1047 +3,808 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>灵山胜境AI导游</title>
+    <title>灵山胜境 · 智慧导览</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ========== 全局重置 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
-            background: linear-gradient(145deg, #e8f4f8 0%, #b8d8e8 50%, #d4e9f2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #eef4f8;
+            color: #1a2a3a;
             min-height: 100vh;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
         }
-        .main-container {
-            width: 100%;
-            max-width: 1200px;
-            background: rgba(255,255,255,0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-radius: 28px;
-            box-shadow: 0 30px 80px rgba(100, 150, 200, 0.25), 0 10px 30px rgba(0,0,0,0.05);
-            overflow: hidden;
-            display: flex;
-            flex-direction: row;
-            height: 90vh;
-            max-height: 750px;
-            border: 1px solid rgba(255,255,255,0.5);
-        }
-        .chat-container { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            min-width: 0; 
-            border-right: 1px solid rgba(180, 210, 230, 0.4);
-            background: rgba(255,255,255,0.5);
-        }
-        .chat-header {
-            background: linear-gradient(135deg, #4a90b0 0%, #5ba3c7 100%);
+
+        /* ========== 左侧导航栏 ========== */
+        .sidebar {
+            width: 180px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a3a4a 0%, #2c6e8a 60%, #3a8aaa 100%);
             color: white;
-            padding: 15px 24px;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            padding: 28px 0 20px;
+        }
+
+        .sidebar-brand {
+            text-align: center;
+            padding: 0 16px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .sidebar-brand .icon {
+            font-size: 36px;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .sidebar-brand h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 3px;
+        }
+        .sidebar-brand p {
+            font-size: 12px;
+            opacity: 0.7;
+            letter-spacing: 4px;
+            margin-top: 2px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 20px 12px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .sidebar-nav a:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+        .sidebar-nav a.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .sidebar-nav a .nav-icon {
+            font-size: 20px;
+            width: 28px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .sidebar-nav a .nav-label {
+            font-size: 14px;
+        }
+        .sidebar-nav a .nav-badge {
+            margin-left: auto;
+            font-size: 10px;
+            background: rgba(255, 215, 0, 0.3);
+            color: #ffd700;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11px;
+            opacity: 0.5;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        /* ========== 主内容区 ========== */
+        .main-content {
+            flex: 1;
+            padding: 24px 32px 40px;
+            max-width: calc(100% - 180px);
+            overflow-y: auto;
+        }
+
+        /* ========== 顶部信息条 ========== */
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-shrink: 0;
-        }
-        .chat-header .title { 
-            font-size: 18px; 
-            font-weight: 600;
-            letter-spacing: 1px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .header-right { display: flex; align-items: center; gap: 10px; }
-        .session-id-display {
-            font-size: 12px;
-            color: rgba(255,255,255,0.85);
-            background: rgba(255,255,255,0.2);
-            padding: 4px 14px;
-            border-radius: 14px;
-            cursor: pointer;
-            max-width: 400px;
-            overflow: hidden;
-            text-overflow: clip;
-            white-space: nowrap;
-            font-family: 'Courier New', monospace;
-            border: 1px solid rgba(255,255,255,0.15);
-        }
-        .session-id-display:hover {
-            background: rgba(255,255,255,0.3);
-        }
-        .clear-btn {
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.25);
-            color: white;
-            padding: 4px 14px;
-            border-radius: 14px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
-            flex-shrink: 0;
-        }
-        .clear-btn:hover { background: rgba(255,80,80,0.4); border-color: rgba(255,80,80,0.5); }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            background: rgba(255,255,255,0.3);
-        }
-        .message { display: flex; gap: 12px; max-width: 85%; }
-        .message.user { align-self: flex-end; flex-direction: row-reverse; }
-        .message-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            box-shadow: 0 2px 8px rgba(74, 144, 176, 0.3);
-            border: 2px solid rgba(255,255,255,0.6);
-        }
-        /* 🔥 AI 助手头像 - 使用图片 */
-        .message.assistant .message-avatar {
-            background: linear-gradient(135deg, #4a90b0, #5ba3c7);
-        }
-        .message.assistant .message-avatar .avatar-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        /* 🔥 用户头像 - 保持 SVG */
-        .message.user .message-avatar {
-            background: linear-gradient(135deg, #6bb5d9, #4a90b0);
-            color: white;
-        }
-        .message-content {
-            background: white;
-            padding: 12px 18px;
-            border-radius: 18px;
-            word-wrap: break-word;
-            line-height: 1.6;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: 1px solid rgba(200, 220, 235, 0.3);
-        }
-        .message.user .message-content { 
-            background: linear-gradient(135deg, #5ba3c7, #4a90b0);
-            color: white;
-            border: none;
-        }
-        .message-time { font-size: 11px; color: #a0b8c8; margin-top: 5px; }
-        .message.user .message-time { color: rgba(255,255,255,0.7); }
-
-        .input-area {
-            padding: 15px 24px;
-            border-top: 1px solid rgba(180, 210, 230, 0.3);
-            display: flex;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
             gap: 12px;
-            background: rgba(255,255,255,0.6);
-            align-items: center;
-            flex-shrink: 0;
-            backdrop-filter: blur(10px);
         }
-        .input-area input {
-            flex: 1;
-            padding: 12px 18px;
-            border: 1px solid rgba(180, 210, 230, 0.4);
-            border-radius: 25px;
+        .top-bar .greeting {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1a3a4a;
+        }
+        .top-bar .greeting small {
             font-size: 15px;
-            outline: none;
-            min-width: 0;
-            background: rgba(255,255,255,0.8);
-            transition: all 0.3s;
+            font-weight: 400;
+            color: #6a8a9a;
         }
-        .input-area input:focus { 
-            border-color: #5ba3c7; 
-            box-shadow: 0 0 0 3px rgba(91, 163, 199, 0.15);
+        .top-bar .weather {
+            font-size: 14px;
+            color: #4a6a7a;
+            background: white;
+            padding: 8px 18px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .input-area input::placeholder {
-            color: #a0b8c8;
+
+        /* ========== 轮播图 ========== */
+        .carousel {
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 28px;
+            box-shadow: 0 8px 30px rgba(44, 110, 138, 0.15);
+            background: #1a3a4a;
+            aspect-ratio: 16/7;
+            max-height: 360px;
         }
-        .voice-btn {
-            width: 44px; height: 44px; border-radius: 50%;
-            background: rgba(255,255,255,0.8);
-            border: 1px solid rgba(180, 210, 230, 0.4);
-            cursor: pointer;
-            font-size: 20px;
+        .carousel-track {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .carousel-slide {
+            min-width: 100%;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
-            user-select: none;
-        }
-        .voice-btn:hover { 
-            background: rgba(91, 163, 199, 0.1);
-            border-color: #5ba3c7;
-        }
-        .voice-btn.recording { 
-            background: #ff6b6b; 
-            color: white; 
-            transform: scale(1.1); 
-            animation: pulse 0.5s infinite alternate;
-            border-color: #ff6b6b;
-        }
-        @keyframes pulse {
-            from { transform: scale(1.05); box-shadow: 0 0 0 0 rgba(255,107,107,0.4); }
-            to { transform: scale(1.15); box-shadow: 0 0 20px 5px rgba(255,107,107,0.2); }
-        }
-        .voice-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .send-btn {
-            background: linear-gradient(135deg, #5ba3c7, #4a90b0);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: 500;
-            flex-shrink: 0;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(74, 144, 176, 0.3);
-        }
-        .send-btn:hover { 
-            background: linear-gradient(135deg, #6bb5d9, #5ba3c7);
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(74, 144, 176, 0.35);
-        }
-        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-        .typing-dots span {
-            animation: blink 1.4s infinite;
-            display: inline-block;
-        }
-        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes blink {
-            0%, 60%, 100% { opacity: 0.3; }
-            30% { opacity: 1; }
-        }
-
-        .recording-tip {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.75);
-            color: white;
-            padding: 24px 48px;
-            border-radius: 20px;
-            font-size: 18px;
-            z-index: 999;
-            display: none;
-            pointer-events: none;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        .recording-tip.active { display: block; }
-        .recording-tip .mic-icon {
-            display: inline-block;
-            animation: pulse 0.5s infinite alternate;
-        }
-
-        .digital-human-wrapper {
-            width: 380px;
-            background: linear-gradient(160deg, #dceef7 0%, #b8d8e8 50%, #c8e4f0 100%);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
             position: relative;
-        }
-        .dh-header {
-            background: rgba(255,255,255,0.15);
-            color: #3a7a9a;
-            padding: 12px;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
-            flex-shrink: 0;
-            letter-spacing: 2px;
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255,255,255,0.2);
-        }
-        .dh-canvas-wrapper {
-            flex: 1;
-            position: relative;
+            color: white;
             overflow: hidden;
         }
-        .dh-canvas-wrapper canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-        .dh-status {
+        .carousel-slide .slide-bg {
             position: absolute;
-            bottom: 20px;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            filter: brightness(0.7);
+            transform: scale(1.05);
+            transition: transform 6s ease;
+        }
+        .carousel-slide:hover .slide-bg {
+            transform: scale(1);
+        }
+        .carousel-slide .slide-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            padding: 20px;
+        }
+        .carousel-slide .slide-content h2 {
+            font-size: 36px;
+            font-weight: 700;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: 2px;
+        }
+        .carousel-slide .slide-content p {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-top: 8px;
+            text-shadow: 0 1px 10px rgba(0, 0, 0, 0.3);
+        }
+        .carousel-slide .slide-content .tag {
+            display: inline-block;
+            background: rgba(255, 215, 0, 0.25);
+            backdrop-filter: blur(4px);
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            margin-top: 10px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .carousel-dots {
+            position: absolute;
+            bottom: 16px;
             left: 50%;
             transform: translateX(-50%);
-            text-align: center;
-            color: rgba(50, 100, 130, 0.7);
-            font-size: 12px;
-            background: rgba(255,255,255,0.6);
-            padding: 6px 16px;
-            border-radius: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 5;
+        }
+        .carousel-dots .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+        .carousel-dots .dot.active {
+            background: white;
+            width: 28px;
+            border-radius: 5px;
+        }
+        .carousel-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 5;
+            background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.4);
-            pointer-events: none;
-            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .carousel-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .carousel-btn.prev {
+            left: 16px;
+        }
+        .carousel-btn.next {
+            right: 16px;
         }
 
+        /* ========== 热门景点 ========== */
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a3a4a;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title .more {
+            margin-left: auto;
+            font-size: 13px;
+            font-weight: 400;
+            color: #6a8a9a;
+            cursor: pointer;
+        }
+        .section-title .more:hover {
+            color: #2c6e8a;
+        }
+
+        .spots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .spot-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+        .spot-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(44, 110, 138, 0.15);
+        }
+        .spot-card .spot-img {
+            height: 120px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        .spot-card .spot-img .rating {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            color: #ffd700;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .spot-card .spot-info {
+            padding: 14px 16px 16px;
+        }
+        .spot-card .spot-info h3 {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .spot-card .spot-info p {
+            font-size: 13px;
+            color: #6a8a9a;
+            margin-top: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .spot-card .spot-info .tag-group {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .spot-card .spot-info .tag-group .tag {
+            font-size: 11px;
+            background: #eef4f8;
+            color: #4a6a7a;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+
+        /* ========== 推荐路线 ========== */
+        .routes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .route-card {
+            background: white;
+            border-radius: 16px;
+            padding: 18px 20px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border-left: 4px solid #4a90b0;
+        }
+        .route-card:hover {
+            box-shadow: 0 6px 24px rgba(44, 110, 138, 0.12);
+            transform: translateX(4px);
+        }
+        .route-card .route-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .route-card .route-header .route-icon {
+            font-size: 20px;
+        }
+        .route-card .route-header .route-tag {
+            font-size: 11px;
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .route-card .route-header .route-tag.popular {
+            background: #fff3e0;
+            color: #e67e22;
+        }
+        .route-card .route-header .route-tag.fast {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .route-card .route-header .route-tag.leisure {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        .route-card h4 {
+            font-size: 16px;
+            margin-top: 6px;
+        }
+        .route-card .route-path {
+            font-size: 13px;
+            color: #4a6a7a;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .route-card .route-path .arrow {
+            color: #4a90b0;
+            font-weight: 300;
+        }
+        .route-card .route-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6a8a9a;
+        }
+
+        /* ========== 底部导览入口 ========== */
+        .cta-section {
+            text-align: center;
+            padding: 32px 0 10px;
+            border-top: 1px solid rgba(44, 110, 138, 0.1);
+        }
+        .cta-section .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 48px;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #2c6e8a, #4a90b0);
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(44, 110, 138, 0.35);
+            text-decoration: none;
+        }
+        .cta-section .cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(44, 110, 138, 0.45);
+        }
+        .cta-section .cta-btn:active {
+            transform: scale(0.97);
+        }
+
+        /* ========== 响应式 ========== */
         @media (max-width: 768px) {
-            .main-container { flex-direction: column; height: auto; max-height: none; border-radius: 20px; }
-            .chat-container { border-right: none; border-bottom: 1px solid rgba(180, 210, 230, 0.3); height: 60vh; }
-            .digital-human-wrapper { width: 100%; height: 50vh; min-height: 300px; }
-            .session-id-display { max-width: 200px; font-size: 10px; }
+            .sidebar {
+                width: 64px;
+                padding: 16px 0 12px;
+            }
+            .sidebar-brand h1,
+            .sidebar-brand p,
+            .sidebar-nav a .nav-label,
+            .sidebar-nav a .nav-badge,
+            .sidebar-footer {
+                display: none;
+            }
+            .sidebar-brand .icon {
+                font-size: 28px;
+                margin-bottom: 0;
+            }
+            .sidebar-nav a {
+                justify-content: center;
+                padding: 12px;
+            }
+            .sidebar-nav a .nav-icon {
+                font-size: 22px;
+                width: auto;
+            }
+            .main-content {
+                padding: 16px;
+                max-width: calc(100% - 64px);
+            }
+            .carousel-slide .slide-content h2 {
+                font-size: 20px;
+            }
+            .carousel-slide .slide-content p {
+                font-size: 13px;
+            }
+            .carousel-btn {
+                width: 32px;
+                height: 32px;
+                font-size: 14px;
+            }
+            .spots-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+            .routes-grid {
+                grid-template-columns: 1fr;
+            }
+            .top-bar .greeting {
+                font-size: 17px;
+            }
+            .cta-section .cta-btn {
+                padding: 14px 32px;
+                font-size: 16px;
+            }
         }
         @media (max-width: 480px) {
-            .chat-header .title { font-size: 15px; }
-            .digital-human-wrapper { height: 40vh; min-height: 250px; }
-            .input-area input { font-size: 14px; padding: 10px 14px; }
-            .send-btn { padding: 10px 18px; font-size: 14px; }
-            .voice-btn { width: 38px; height: 38px; font-size: 18px; }
-            .chat-messages { padding: 16px; }
-            .input-area { padding: 12px 16px; }
-            .session-id-display { max-width: 120px; font-size: 9px; }
-            .message-avatar { width: 32px; height: 32px; font-size: 16px; }
+            .spots-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            .spot-card .spot-img {
+                height: 90px;
+            }
+            .spot-card .spot-info {
+                padding: 10px 12px 12px;
+            }
+            .spot-card .spot-info h3 {
+                font-size: 13px;
+            }
+            .spot-card .spot-info p {
+                font-size: 12px;
+            }
+            .carousel {
+                aspect-ratio: 16/9;
+            }
+            .carousel-slide .slide-content h2 {
+                font-size: 16px;
+            }
+            .carousel-slide .slide-content p {
+                font-size: 12px;
+            }
+            .route-card {
+                padding: 14px 16px;
+            }
+            .top-bar .weather {
+                font-size: 12px;
+                padding: 4px 12px;
+            }
         }
     </style>
-    <script src="../digital-human-test/lib/pixi.min.js"></script>
-    <script src="../digital-human-test/lib/live2dcubismcore.min.js"></script>
-    <script src="../digital-human-test/lib/cubism4.min.js"></script>
 </head>
 <body>
 
-    <div class="recording-tip" id="recordingTip">
-        <span class="mic-icon">🎙️</span> 正在录音...
-    </div>
+    <!-- ===== 左侧导航栏 ===== -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <span class="icon">🏯</span>
+            <h1>灵山胜境</h1>
+            <p>智慧导览</p>
+        </div>
 
-    <div class="main-container">
-        <div class="chat-container">
-            <div class="chat-header">
-                <span class="title">🏯 灵山胜境 AI导游</span>
-                <div class="header-right">
-                    <span class="session-id-display" id="sessionDisplay" title="点击复制">📋</span>
-                    <button class="clear-btn" id="clearSessionBtn">🗑️ 清空</button>
-                </div>
+        <div class="sidebar-nav">
+            <a href="#" class="active">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </a>
+            <a href="#" onclick="location.href='/web/chat.html'">
+                <span class="nav-icon">🎭</span>
+                <span class="nav-label">AI导游</span>
+                <span class="nav-badge">NEW</span>
+            </a>
+            <a href="#">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-label">路线推荐</span>
+            </a>
+            <a href="#">
+                <span class="nav-icon">📍</span>
+                <span class="nav-label">景点列表</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">v2.0 · 智慧灵山</div>
+    </nav>
+
+    <!-- ===== 主内容区 ===== -->
+    <main class="main-content">
+
+        <!-- 顶部信息条 -->
+        <div class="top-bar">
+            <div class="greeting">
+                👋 欢迎来到灵山胜境
+                <small>· 国家5A级景区</small>
             </div>
-            <div class="chat-messages" id="chatMessages">
-                <div class="message assistant">
-                    <div class="message-avatar">
-                        <img src="/web/images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                    </div>
-                    <div class="message-content">
-                        您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？
-                        <div class="message-time">刚刚</div>
-                    </div>
-                </div>
-            </div>
-            <div class="input-area">
-                <button class="voice-btn" id="voiceBtn" title="按住说话">🎤</button>
-                <input type="text" id="messageInput" placeholder="输入问题或按住🎤说话..." autocomplete="off">
-                <button class="send-btn" id="sendBtn">发送</button>
+            <div class="weather">
+                ☀️ 晴 28°C  ·  适宜出游
             </div>
         </div>
 
-        <div class="digital-human-wrapper">
-            <div class="dh-header">🎭 小灵 · AI导游</div>
-            <div class="dh-canvas-wrapper" id="dhContainer">
-                <canvas id="live2dCanvas"></canvas>
-                <div class="dh-status" id="dhStatus">⏳ 加载中...</div>
+        <!-- 轮播图 -->
+        <div class="carousel" id="carousel">
+            <div class="carousel-track" id="carouselTrack">
+                <div class="carousel-slide">
+                    <div class="slide-bg" style="background-image: url('https://picsum.photos/seed/lingshan1/1200/600');"></div>
+                    <div class="slide-content">
+                        <h2>🏛️ 灵山大佛</h2>
+                        <p>88米高青铜大佛 · 世界之最</p>
+                        <span class="tag">⭐ 必打卡</span>
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="slide-bg" style="background-image: url('https://picsum.photos/seed/lingshan2/1200/600');"></div>
+                    <div class="slide-content">
+                        <h2>⛲ 九龙灌浴</h2>
+                        <p>大型音乐动态群雕 · 震撼视觉</p>
+                        <span class="tag">🎵 定时演出</span>
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="slide-bg" style="background-image: url('https://picsum.photos/seed/lingshan3/1200/600');"></div>
+                    <div class="slide-content">
+                        <h2>🏯 梵宫</h2>
+                        <p>佛教艺术殿堂 · 金碧辉煌</p>
+                        <span class="tag">✨ 文化瑰宝</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="carousel-btn prev" onclick="moveCarousel(-1)">‹</button>
+            <button class="carousel-btn next" onclick="moveCarousel(1)">›</button>
+
+            <div class="carousel-dots" id="carouselDots">
+                <button class="dot active" data-index="0"></button>
+                <button class="dot" data-index="1"></button>
+                <button class="dot" data-index="2"></button>
             </div>
         </div>
-    </div>
+
+        <!-- 热门景点 -->
+        <div class="section-title">
+            🔥 热门景点
+            <span class="more" onclick="location.href='#'">查看全部 →</span>
+        </div>
+        <div class="spots-grid">
+            <a class="spot-card" href="#">
+                <div class="spot-img" style="background-image: url('https://picsum.photos/seed/dafo/400/300');">
+                    <span class="rating">⭐ 4.9</span>
+                </div>
+                <div class="spot-info">
+                    <h3>灵山大佛</h3>
+                    <p>88米高青铜大佛，庄严肃穆</p>
+                    <div class="tag-group">
+                        <span class="tag">必打卡</span>
+                        <span class="tag">祈福</span>
+                    </div>
+                </div>
+            </a>
+            <a class="spot-card" href="#">
+                <div class="spot-img" style="background-image: url('https://picsum.photos/seed/jiulong/400/300');">
+                    <span class="rating">⭐ 4.8</span>
+                </div>
+                <div class="spot-info">
+                    <h3>九龙灌浴</h3>
+                    <p>大型音乐动态群雕，震撼演出</p>
+                    <div class="tag-group">
+                        <span class="tag">演出</span>
+                        <span class="tag">亲子</span>
+                    </div>
+                </div>
+            </a>
+            <a class="spot-card" href="#">
+                <div class="spot-img" style="background-image: url('https://picsum.photos/seed/fangong/400/300');">
+                    <span class="rating">⭐ 4.7</span>
+                </div>
+                <div class="spot-info">
+                    <h3>梵宫</h3>
+                    <p>佛教艺术殿堂，金碧辉煌</p>
+                    <div class="tag-group">
+                        <span class="tag">文化</span>
+                        <span class="tag">艺术</span>
+                    </div>
+                </div>
+            </a>
+            <a class="spot-card" href="#">
+                <div class="spot-img" style="background-image: url('https://picsum.photos/seed/wuyin/400/300');">
+                    <span class="rating">⭐ 4.6</span>
+                </div>
+                <div class="spot-info">
+                    <h3>五印坛城</h3>
+                    <p>藏传佛教风格，神秘庄严</p>
+                    <div class="tag-group">
+                        <span class="tag">藏传</span>
+                        <span class="tag">拍照</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- 推荐路线 -->
+        <div class="section-title">
+            🗺️ 推荐路线
+            <span class="more" onclick="location.href='#'">查看全部 →</span>
+        </div>
+        <div class="routes-grid">
+            <div class="route-card" style="border-left-color: #e67e22;">
+                <div class="route-header">
+                    <span class="route-icon">🌟</span>
+                    <span class="route-tag popular">人气推荐</span>
+                </div>
+                <h4>经典一日游</h4>
+                <div class="route-path">
+                    大佛 <span class="arrow">→</span> 九龙灌浴 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 五印坛城
+                </div>
+                <div class="route-meta">
+                    <span>🚶 3.5km</span>
+                    <span>⏱️ 约4小时</span>
+                    <span>🏷️ 精华全览</span>
+                </div>
+            </div>
+            <div class="route-card" style="border-left-color: #2e7d32;">
+                <div class="route-header">
+                    <span class="route-icon">👨‍👩‍👦</span>
+                    <span class="route-tag fast">轻松休闲</span>
+                </div>
+                <h4>亲子休闲游</h4>
+                <div class="route-path">
+                    大佛 <span class="arrow">→</span> 九龙灌浴 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 曼飞龙塔
+                </div>
+                <div class="route-meta">
+                    <span>🚶 2km</span>
+                    <span>⏱️ 约3小时</span>
+                    <span>🏷️ 轻松游览</span>
+                </div>
+            </div>
+            <div class="route-card" style="border-left-color: #1565c0;">
+                <div class="route-header">
+                    <span class="route-icon">📿</span>
+                    <span class="route-tag leisure">深度体验</span>
+                </div>
+                <h4>文化深度游</h4>
+                <div class="route-path">
+                    大佛 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 五印坛城 <span class="arrow">→</span> 曼飞龙塔 <span class="arrow">→</span> 佛博馆
+                </div>
+                <div class="route-meta">
+                    <span>🚶 5km</span>
+                    <span>⏱️ 约6小时</span>
+                    <span>🏷️ 深度文化</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部导览入口 -->
+        <div class="cta-section">
+            <a href="/web/chat.html" class="cta-btn">
+                🎤 开始导览 · 与小灵对话
+            </a>
+            <p style="margin-top:12px; font-size:13px; color:#6a8a9a;">
+                AI数字人导游 · 语音交互 · 智能推荐
+            </p>
+        </div>
+
+    </main>
 
     <script>
-        // ============================================================
-        // 1. 会话管理
-        // ============================================================
-        function generateSessionId() {
-            return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-        }
-        let sessionId = localStorage.getItem('sessionId');
-        if (!sessionId) {
-            sessionId = generateSessionId();
-            localStorage.setItem('sessionId', sessionId);
-        }
-        document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
+        // ===== 轮播图逻辑 =====
+        let currentSlide = 0;
+        const totalSlides = 3;
+        const track = document.getElementById('carouselTrack');
+        const dots = document.querySelectorAll('.dot');
 
-        // ============================================================
-        // 2. DOM 引用
-        // ============================================================
-        const chatMessages = document.getElementById('chatMessages');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const voiceBtn = document.getElementById('voiceBtn');
-        const recordingTip = document.getElementById('recordingTip');
-        const dhStatus = document.getElementById('dhStatus');
-
-        let isWaiting = false;
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isRecording = false;
-        let recordTimer = null;
-
-        // ============================================================
-        // 3. 对话功能
-        // ============================================================
-        function addMessage(content, role) {
-            const div = document.createElement('div');
-            div.className = `message ${role}`;
-            
-            let avatarHTML = '';
-            if (role === 'assistant') {
-                // 🔥 AI 助手头像（使用你上传的图片）
-                avatarHTML = `
-                    <div class="message-avatar">
-                        <img src="/web/images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                    </div>
-                `;
-            } else {
-                // 🔥 用户头像（保持原来的 SVG）
-                avatarHTML = `
-                    <div class="message-avatar">
-                        <svg viewBox="0 0 100 100" width="40" height="40">
-                            <circle cx="50" cy="35" r="20" fill="#fff" opacity="0.8"/>
-                            <circle cx="42" cy="32" rx="3" ry="4" fill="#6bb5d9"/>
-                            <circle cx="58" cy="32" rx="3" ry="4" fill="#6bb5d9"/>
-                            <circle cx="50" cy="42" r="6" fill="#e8a0a0" opacity="0.5"/>
-                            <path d="M38 55 Q50 65 62 55" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                `;
-            }
-
-            const time = new Date().toLocaleTimeString();
-            div.innerHTML = `
-                ${avatarHTML}
-                <div class="message-content">
-                    ${escapeHtml(content)}
-                    <div class="message-time">${time}</div>
-                </div>
-            `;
-            chatMessages.appendChild(div);
-            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            return div;
+        function updateCarousel() {
+            track.style.transform = `translateX(-${currentSlide * 100}%)`;
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentSlide);
+            });
         }
 
-        function escapeHtml(text) {
-            const d = document.createElement('div');
-            d.textContent = text;
-            return d.innerHTML;
+        function moveCarousel(direction) {
+            currentSlide = (currentSlide + direction + totalSlides) % totalSlides;
+            updateCarousel();
         }
 
-        function showTyping() {
-            const div = document.createElement('div');
-            div.className = 'message assistant';
-            div.id = 'typingIndicator';
-            div.innerHTML = `
-                <div class="message-avatar">
-                    <img src="/web/images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                </div>
-                <div class="message-content">
-                    <span class="typing-dots"><span>●</span><span>●</span><span>●</span></span>
-                </div>
-            `;
-            chatMessages.appendChild(div);
-            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
-
-        function hideTyping() {
-            const el = document.getElementById('typingIndicator');
-            if (el) el.remove();
-        }
-
-        // ============================================================
-        // 4. 发送消息
-        // ============================================================
-        async function sendMessage(question) {
-            if (!question) {
-                question = messageInput.value.trim();
-            }
-            if (!question || isWaiting) return;
-
-            messageInput.value = '';
-            addMessage(question, 'user');
-            isWaiting = true;
-            sendBtn.disabled = true;
-            voiceBtn.disabled = true;
-            showTyping();
-
-            try {
-                const res = await fetch(`/api/chat/ask`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        question: question,
-                        use_rag: true,
-                        n_results: 3,
-                        session_id: sessionId
-                    })
-                });
-                const data = await res.json();
-                hideTyping();
-
-                if (data.success) {
-                    addMessage(data.answer, 'assistant');
-                    if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
-                        await window.digitalHuman.speak(data.answer);
-                    }
-                } else {
-                    addMessage('抱歉，服务暂时不可用。', 'assistant');
-                }
-            } catch (err) {
-                hideTyping();
-                console.error(err);
-                addMessage('网络开小差了，请稍后再试。', 'assistant');
-            } finally {
-                isWaiting = false;
-                sendBtn.disabled = false;
-                voiceBtn.disabled = false;
-                messageInput.focus();
-            }
-        }
-
-        // ============================================================
-        // 5. 语音输入
-        // ============================================================
-        async function startRecording() {
-            if (isRecording || isWaiting) return;
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) audioChunks.push(e.data);
-                };
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/mp3' });
-                    stream.getTracks().forEach(t => t.stop());
-                    recordingTip.classList.remove('active');
-                    if (blob.size > 0) await recognizeAndSend(blob);
-                };
-                mediaRecorder.start();
-                isRecording = true;
-                voiceBtn.classList.add('recording');
-                recordingTip.classList.add('active');
-                recordTimer = setTimeout(() => {
-                    if (isRecording) stopRecording();
-                }, 10000);
-            } catch (err) {
-                console.error('录音失败:', err);
-                alert('无法访问麦克风，请检查权限');
-            }
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-                isRecording = false;
-                voiceBtn.classList.remove('recording');
-                if (recordTimer) {
-                    clearTimeout(recordTimer);
-                    recordTimer = null;
-                }
-            }
-        }
-
-        async function recognizeAndSend(blob) {
-            const formData = new FormData();
-            formData.append('audio', blob, 'speech.mp3');
-            try {
-                const res = await fetch(`/api/voice/asr`, { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.success && data.text) {
-                    await sendMessage(data.text);
-                } else {
-                    addMessage('语音识别失败，请重试', 'assistant');
-                }
-            } catch (err) {
-                console.error('识别失败:', err);
-                addMessage('语音识别服务异常', 'assistant');
-            }
-        }
-
-        // ============================================================
-        // 6. 🎯 数字人控制模块
-        // ============================================================
-        const DigitalHuman = {
-            app: null,
-            model: null,
-            isReady: false,
-            isSpeaking: false,
-            _animationId: null,
-            _audioContext: null,
-            _currentAudio: null,
-            _mouthSmooth: 0,
-            _mouthParamIndex: -1,
-            _formParamIndex: -1,
-            _idleTimer: null,
-            _isIdle: true,
-
-            async init() {
-                const container = document.getElementById('dhContainer');
-                const canvas = document.getElementById('live2dCanvas');
-                const width = container.clientWidth || 380;
-                const height = container.clientHeight || 500;
-
-                try {
-                    this.app = new PIXI.Application({
-                        view: canvas,
-                        width: width,
-                        height: height,
-                        backgroundColor: 0xdceef7,
-                        resolution: window.devicePixelRatio || 1,
-                        autoDensity: true
-                    });
-
-                    const modelPath = '../models/hiyori_pro/runtime/hiyori_pro_t11.model3.json';
-                    console.log('📂 加载模型:', modelPath);
-                    this.model = await PIXI.live2d.Live2DModel.from(modelPath);
-                    this.app.stage.addChild(this.model);
-
-                    this.model.anchor.set(0.5, 0.5);
-                    this.model.x = this.app.screen.width / 2;
-                    this.model.y = this.app.screen.height / 2;
-                    this.model.scale.set(0.14, 0.14);
-
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    this._disableAllMotions();
-                    this._cacheParamIndices();
-                    this._resetAllParameters();
-
-                    this.isReady = true;
-                    dhStatus.textContent = '✅ 已就绪';
-                    console.log('✅ Hiyori Pro 加载成功');
-
-                    this._startIdle();
-
-                    window.addEventListener('resize', () => this.resize());
-
-                } catch (err) {
-                    console.error('数字人加载失败:', err);
-                    dhStatus.textContent = '❌ 加载失败: ' + err.message;
-                }
-            },
-
-            _disableAllMotions() {
-                try {
-                    if (!this.model || !this.model.internalModel) return;
-                    const internal = this.model.internalModel;
-                    
-                    if (internal.motionManager) {
-                        if (typeof internal.motionManager.stopAllMotions === 'function') {
-                            internal.motionManager.stopAllMotions();
-                        }
-                        if (internal.motionManager.motionGroups) {
-                            internal.motionManager.motionGroups = {};
-                        }
-                        if (internal.motionManager.state) {
-                            internal.motionManager.state.playing = false;
-                            internal.motionManager.state.currentTime = 0;
-                            internal.motionManager.state.duration = 0;
-                        }
-                        internal.motionManager._currentMotion = null;
-                        internal.motionManager._motions = [];
-                        if (internal.motionManager._queuedMotions) {
-                            internal.motionManager._queuedMotions = [];
-                        }
-                        if (internal.motionManager._onFinish) {
-                            internal.motionManager._onFinish = null;
-                        }
-                        internal.motionManager.startRandomMotion = function() {
-                            return Promise.resolve(null);
-                        };
-                        console.log('✅ motionManager 已彻底禁用');
-                    }
-                } catch(e) {
-                    console.log('禁用动作失败:', e);
-                }
-            },
-
-            _cacheParamIndices() {
-                try {
-                    if (!this.model || !this.model.internalModel) return;
-                    const coreModel = this.model.internalModel.coreModel;
-                    const paramIds = coreModel._parameterIds;
-                    
-                    for (let i = 0; i < paramIds.length; i++) {
-                        const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
-                        if (name === 'ParamMouthOpenY') {
-                            this._mouthParamIndex = i;
-                            console.log(`✅ 缓存 ParamMouthOpenY 索引: ${i}`);
-                        }
-                        if (name === 'ParamMouthForm') {
-                            this._formParamIndex = i;
-                            console.log(`✅ 缓存 ParamMouthForm 索引: ${i}`);
-                        }
-                    }
-                } catch(e) {
-                    console.warn('缓存参数索引失败:', e);
-                }
-            },
-
-            _resetAllParameters() {
-                try {
-                    if (!this.model || !this.model.internalModel) return;
-                    const coreModel = this.model.internalModel.coreModel;
-                    
-                    for (let i = 0; i < coreModel._parameterValues.length; i++) {
-                        coreModel._parameterValues[i] = 0;
-                    }
-                    
-                    coreModel.update();
-                    console.log('✅ 所有参数已重置');
-                } catch(e) {
-                    console.log('重置参数失败:', e);
-                }
-            },
-
-            _setMouth(value) {
-                try {
-                    if (!this.model || !this.model.internalModel) return;
-                    const coreModel = this.model.internalModel.coreModel;
-                    
-                    if (this._mouthParamIndex !== -1) {
-                        coreModel.setParameterValueByIndex(this._mouthParamIndex, value);
-                        coreModel._parameterValues[this._mouthParamIndex] = value;
-                    }
-                    
-                    if (this._formParamIndex !== -1) {
-                        const formValue = value > 0.3 ? -0.5 + value * 0.3 : -0.3;
-                        coreModel.setParameterValueByIndex(this._formParamIndex, formValue);
-                        coreModel._parameterValues[this._formParamIndex] = formValue;
-                    }
-                    
-                    coreModel.update();
-                } catch(e) {}
-            },
-
-            _setEye(value) {
-                try {
-                    if (!this.model || !this.model.internalModel) return;
-                    const coreModel = this.model.internalModel.coreModel;
-                    const paramIds = coreModel._parameterIds;
-                    for (let i = 0; i < paramIds.length; i++) {
-                        const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
-                        if (name === 'ParamEyeLOpen' || name === 'ParamEyeROpen') {
-                            coreModel.setParameterValueByIndex(i, value);
-                            coreModel._parameterValues[i] = value;
-                        }
-                    }
-                    coreModel.update();
-                } catch(e) {}
-            },
-
-            _setBrow(value) {
-                try {
-                    if (!this.model || !this.model.internalModel) return;
-                    const coreModel = this.model.internalModel.coreModel;
-                    const paramIds = coreModel._parameterIds;
-                    for (let i = 0; i < paramIds.length; i++) {
-                        const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
-                        if (name === 'ParamBrowLY' || name === 'ParamBrowRY') {
-                            coreModel.setParameterValueByIndex(i, value);
-                            coreModel._parameterValues[i] = value;
-                        }
-                    }
-                    coreModel.update();
-                } catch(e) {}
-            },
-
-            _startIdle() {
-                this._stopIdle();
-                this._isIdle = true;
-                
-                const doIdleAction = () => {
-                    if (!this._isIdle || this.isSpeaking || !this.isReady) {
-                        this._idleTimer = setTimeout(doIdleAction, 3000);
-                        return;
-                    }
-                    
-                    const actions = [
-                        () => {
-                            this._setEye(1.0);
-                            setTimeout(() => this._setEye(0), 150);
-                        },
-                        () => {
-                            this._setMouth(0.3);
-                            setTimeout(() => this._setMouth(0), 2000);
-                        },
-                        () => {
-                            this._setBrow(0.5);
-                            setTimeout(() => this._setBrow(0), 1000);
-                        },
-                        () => {
-                            this._setMouth(0.2);
-                            this._setEye(0.8);
-                            setTimeout(() => {
-                                this._setMouth(0);
-                                this._setEye(0);
-                            }, 1500);
-                        }
-                    ];
-                    
-                    const action = actions[Math.floor(Math.random() * actions.length)];
-                    action();
-                    
-                    const delay = 3000 + Math.random() * 4000;
-                    this._idleTimer = setTimeout(doIdleAction, delay);
-                };
-                
-                setTimeout(doIdleAction, 2000);
-                console.log('✅ 待机表情已启动');
-            },
-
-            _stopIdle() {
-                this._isIdle = false;
-                if (this._idleTimer) {
-                    clearTimeout(this._idleTimer);
-                    this._idleTimer = null;
-                }
-            },
-
-            resize() {
-                if (!this.app || !this.model) return;
-                try {
-                    const container = document.getElementById('dhContainer');
-                    const width = container.clientWidth;
-                    const height = container.clientHeight;
-                    this.app.renderer.resize(width, height);
-                    this.model.x = this.app.screen.width / 2;
-                    this.model.y = this.app.screen.height / 2;
-                    const scale = Math.min(width, height) / 1000;
-                    this.model.scale.set(scale * 0.16, scale * 0.16);
-                } catch(e) {}
-            },
-
-            async speak(text) {
-                if (!this.isReady || !text || !this.model) return;
-                
-                if (this.isSpeaking) {
-                    this._stopSpeaking();
-                    await new Promise(r => setTimeout(r, 100));
-                }
-
-                this.isSpeaking = true;
-                this._isIdle = false;
-                this._stopIdle();
-                
-                dhStatus.textContent = '🔊 合成语音...';
-
-                try {
-                    const res = await fetch(`/api/voice/tts`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: text, voice_type: 0 })
-                    });
-                    const data = await res.json();
-
-                    if (!data.success || !data.audio_url) {
-                        dhStatus.textContent = '❌ 合成失败';
-                        this.isSpeaking = false;
-                        this._startIdle();
-                        return;
-                    }
-
-                    this._disableAllMotions();
-                    this._setMouth(0);
-
-                    const audio = new Audio(data.audio_url);
-                    this._currentAudio = audio;
-
-                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    this._audioContext = audioCtx;
-
-                    const source = audioCtx.createMediaElementSource(audio);
-                    const analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 256;
-                    source.connect(analyser);
-                    analyser.connect(audioCtx.destination);
-                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-                    this._mouthSmooth = 0;
-                    let isActive = true;
-
-                    const updateMouth = () => {
-                        if (!isActive || !this.model || !this.model.internalModel || audio.paused || audio.ended) {
-                            this._setMouth(0);
-                            if (this._animationId) {
-                                cancelAnimationFrame(this._animationId);
-                                this._animationId = null;
-                            }
-                            return;
-                        }
-
-                        try {
-                            analyser.getByteFrequencyData(dataArray);
-                            let sum = 0;
-                            for (let i = 0; i < dataArray.length; i++) {
-                                sum += dataArray[i];
-                            }
-                            const avg = sum / dataArray.length;
-                            let mouthOpen = Math.min(avg / 128, 1.5);
-                            
-                            if (mouthOpen < 0.05) mouthOpen = 0;
-                            
-                            this._mouthSmooth = this._mouthSmooth * 0.3 + mouthOpen * 0.7;
-                            mouthOpen = this._mouthSmooth;
-
-                            this._setMouth(mouthOpen);
-
-                        } catch(e) {}
-
-                        this._animationId = requestAnimationFrame(updateMouth);
-                    };
-
-                    audio.onplay = () => {
-                        dhStatus.textContent = '🎤 说话中...';
-                        isActive = true;
-                        updateMouth();
-                    };
-
-                    audio.onended = () => {
-                        isActive = false;
-                        this._finishSpeaking();
-                    };
-
-                    audio.onerror = () => {
-                        console.error('音频播放错误');
-                        isActive = false;
-                        this._finishSpeaking();
-                    };
-
-                    await audio.play();
-
-                } catch (err) {
-                    console.error('说话失败:', err);
-                    dhStatus.textContent = '❌ 说话失败';
-                    this._finishSpeaking();
-                }
-            },
-
-            _stopSpeaking() {
-                try {
-                    if (this._currentAudio) {
-                        this._currentAudio.pause();
-                        this._currentAudio = null;
-                    }
-                    if (this._audioContext) {
-                        this._audioContext.close();
-                        this._audioContext = null;
-                    }
-                    if (this._animationId) {
-                        cancelAnimationFrame(this._animationId);
-                        this._animationId = null;
-                    }
-                    this._setMouth(0);
-                } catch(e) {}
-                this.isSpeaking = false;
-            },
-
-            _finishSpeaking() {
-                this._setMouth(0);
-                
-                if (this._animationId) {
-                    cancelAnimationFrame(this._animationId);
-                    this._animationId = null;
-                }
-                
-                if (this._audioContext) {
-                    try { this._audioContext.close(); } catch(e) {}
-                    this._audioContext = null;
-                }
-                
-                this._currentAudio = null;
-                this.isSpeaking = false;
-                this._mouthSmooth = 0;
-                dhStatus.textContent = '✅ 已就绪';
-                
-                this._disableAllMotions();
-                this._startIdle();
-            }
-        };
-
-        // ============================================================
-        // 7. 清空会话
-        // ============================================================
-        document.getElementById('clearSessionBtn').addEventListener('click', async function() {
-            if (confirm('确定要清空对话记忆吗？')) {
-                try {
-                    await fetch(`/api/chat/clear?session_id=${sessionId}`, { method: 'POST' });
-                    sessionId = generateSessionId();
-                    localStorage.setItem('sessionId', sessionId);
-                    document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
-                    chatMessages.innerHTML = '';
-                    addMessage('您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？', 'assistant');
-                    addMessage('🔄 对话已清空，新会话ID: ' + sessionId, 'assistant');
-                } catch (err) {
-                    console.error('清空失败:', err);
-                    alert('清空失败，请重试');
-                }
-            }
-        });
-
-        document.getElementById('sessionDisplay').addEventListener('click', function() {
-            navigator.clipboard.writeText(sessionId).then(() => {
-                alert('会话ID已复制: ' + sessionId);
-            }).catch(() => {
-                const input = document.createElement('input');
-                input.value = sessionId;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                document.body.removeChild(input);
-                alert('会话ID已复制: ' + sessionId);
+        // 点击小圆点切换
+        dots.forEach((dot) => {
+            dot.addEventListener('click', function() {
+                currentSlide = parseInt(this.dataset.index);
+                updateCarousel();
             });
         });
 
-        // ============================================================
-        // 8. 事件绑定
-        // ============================================================
-        sendBtn.onclick = () => {
-            const text = messageInput.value.trim();
-            if (text) sendMessage(text);
-        };
-        messageInput.onkeypress = (e) => {
-            if (e.key === 'Enter') {
-                const text = messageInput.value.trim();
-                if (text) sendMessage(text);
-            }
-        };
-        voiceBtn.addEventListener('mousedown', startRecording);
-        voiceBtn.addEventListener('mouseup', stopRecording);
-        voiceBtn.addEventListener('mouseleave', stopRecording);
-        voiceBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            startRecording();
-        });
-        voiceBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            stopRecording();
-        });
-        voiceBtn.addEventListener('touchcancel', stopRecording);
+        // 自动轮播（每5秒）
+        let autoPlay = setInterval(() => moveCarousel(1), 5000);
 
-        // ============================================================
-        // 9. 启动
-        // ============================================================
-        window.digitalHuman = DigitalHuman;
-        DigitalHuman.init();
-        messageInput.focus();
+        // 鼠标悬停暂停
+        const carousel = document.getElementById('carousel');
+        carousel.addEventListener('mouseenter', () => clearInterval(autoPlay));
+        carousel.addEventListener('mouseleave', () => {
+            autoPlay = setInterval(() => moveCarousel(1), 5000);
+        });
 
-        console.log('✅ 灵山胜境AI导游已加载');
-        console.log('📡 API地址: /api/chat/ask');
-        console.log(`📋 会话ID: ${sessionId}`);
-        console.log('🎤 按住语音按钮说话');
-        console.log('💡 多轮对话已启用');
-        console.log('🎯 说话有嘴型，不说话有表情');
+        console.log('🏠 灵山胜境首页加载成功');
+        console.log('📌 点击左侧 "AI导游" 进入数字人对话');
     </script>
+
 </body>
 </html>
