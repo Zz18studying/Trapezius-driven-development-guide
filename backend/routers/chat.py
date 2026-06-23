@@ -161,6 +161,7 @@ async def ask_verified(request: ChatRequest):
             context = rag_service.get_context(request.question, request.n_results)
 
     # 调用安全问答服务（含验证）
+    # 注意：不提前返回拒答，由 safe_llm_service 内部处理
     result = await safe_llm_service.ask_with_verification(
         question=request.question,
         context=context,

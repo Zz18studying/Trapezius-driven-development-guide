@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-RAG检索服务 - 带模型预热功能
+RAG检索服务 - 带模型预热 + 宽松重试功能
 """
 
 import os
@@ -69,6 +69,7 @@ class RAGService:
             elapsed = time.time() - start
             print(f"[RAG] 检索耗时: {elapsed:.2f}秒")
 
+            # ===== 第一阶段：用标准阈值过滤 =====
             formatted_results = []
             if results['documents'] and results['documents'][0]:
                 for i, (doc, metadata, distance) in enumerate(zip(
@@ -85,6 +86,28 @@ class RAGService:
                             "similarity": round(similarity, 4),
                             "index": i + 1
                         })
+
+            # ===== 第二阶段：如果标准阈值无结果，用宽松阈值重试 =====
+            if len(formatted_results) == 0:
+                fallback_threshold = getattr(config, 'FALLBACK_SIMILARITY', 0.3)
+                print(f"[RAG] 标准阈值 ({config.MIN_SIMILARITY}) 无结果，使用宽松阈值 ({fallback_threshold}) 重试...")
+                
+                if results['documents'] and results['documents'][0]:
+                    for i, (doc, metadata, distance) in enumerate(zip(
+                        results['documents'][0],
+                        results['metadatas'][0],
+                        results['distances'][0]
+                    )):
+                        similarity = 1 - distance
+                        if similarity >= fallback_threshold:
+                            formatted_results.append({
+                                "question": metadata.get('question', ''),
+                                "answer": metadata.get('answer', ''),
+                                "category": metadata.get('category', ''),
+                                "similarity": round(similarity, 4),
+                                "index": i + 1
+                            })
+                    print(f"[RAG] 宽松重试找到 {len(formatted_results)} 条结果")
 
             return {
                 "success": True,
