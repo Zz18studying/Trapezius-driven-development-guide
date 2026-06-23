@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-对话路由 - 支持多轮对话记忆
+对话路由 - 支持多轮对话记忆 + 双模型交叉验证
 """
 
 import time
+import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
@@ -15,6 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
+from services.db_service import save_conversation
+from services.safe_llm_service import get_safe_llm_service
 
 router = APIRouter(prefix="/api/chat", tags=["对话"])
 
@@ -23,7 +26,7 @@ router = APIRouter(prefix="/api/chat", tags=["对话"])
 class ChatRequest(BaseModel):
     """对话请求"""
     question: str
-    session_id: Optional[str] = None          # 会话ID，用于多轮对话记忆
+    session_id: Optional[str] = None
     use_rag: Optional[bool] = True
     n_results: Optional[int] = 3
 
@@ -47,6 +50,16 @@ class SearchResponse(BaseModel):
     success: bool
     results: List[dict]
     total: int
+    error: Optional[str] = None
+
+
+class VerifiedChatResponse(BaseModel):
+    """验证对话响应"""
+    success: bool
+    answer: str
+    confidence: float
+    verified_sentences: Optional[List[dict]] = None
+    sources: Optional[List[dict]] = None
     error: Optional[str] = None
 
 
@@ -100,12 +113,83 @@ async def ask(request: ChatRequest):
             error=llm_result['error']
         )
 
+    # 4. 保存对话记录
+    try:
+        sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
+        save_conversation(
+            session_id=request.session_id or "unknown",
+            question=request.question,
+            answer=llm_result['answer'],
+            sources=sources_json,
+            response_time=time.time() - total_start,
+            sentiment=None
+        )
+        print("[API] 对话记录已保存")
+    except Exception as e:
+        print(f"[API] 保存对话记录失败: {e}")
+
     print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
     return ChatResponse(
         success=True,
         answer=llm_result['answer'],
         sources=sources if sources else None,
         error=None
+    )
+
+
+@router.post("/ask/verified", response_model=VerifiedChatResponse)
+async def ask_verified(request: ChatRequest):
+    """
+    验证对话接口：分段生成 + 逐句交叉验证（更可靠）
+    """
+    total_start = time.time()
+    print(f"\n[API] 收到验证请求: {request.question[:50]}...")
+
+    rag_service = get_rag_service()
+    safe_llm_service = get_safe_llm_service()
+
+    context = ""
+    sources = []
+
+    if request.use_rag and rag_service.is_ready():
+        rag_start = time.time()
+        search_result = rag_service.search(request.question, request.n_results)
+        print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
+
+        if search_result['success'] and search_result['results']:
+            sources = search_result['results'][:3]
+            context = rag_service.get_context(request.question, request.n_results)
+
+    # 调用安全问答服务（含验证）
+    result = await safe_llm_service.ask_with_verification(
+        question=request.question,
+        context=context,
+        session_id=request.session_id
+    )
+
+    # 保存对话记录
+    try:
+        sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
+        save_conversation(
+            session_id=request.session_id or "unknown",
+            question=request.question,
+            answer=result.get("answer", ""),
+            sources=sources_json,
+            response_time=time.time() - total_start,
+            sentiment=None
+        )
+        print("[API] 验证对话记录已保存")
+    except Exception as e:
+        print(f"[API] 保存验证对话记录失败: {e}")
+
+    print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
+    return VerifiedChatResponse(
+        success=result["success"],
+        answer=result["answer"],
+        confidence=result.get("confidence", 0.0),
+        verified_sentences=result.get("verified_sentences"),
+        sources=sources if sources else None,
+        error=result.get("error")
     )
 
 
