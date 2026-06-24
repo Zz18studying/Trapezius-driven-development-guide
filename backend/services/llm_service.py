@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-大模型调用服务 - 使用 DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知（人性化版）
+大模型调用服务 - 使用 DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划 + 实时天气
 """
 
 import os
@@ -11,6 +11,7 @@ from openai import OpenAI
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+from services.weather_service import get_weather_service
 
 
 class LLMService:
@@ -28,7 +29,7 @@ class LLMService:
             base_url="https://api.deepseek.com"
         )
         self.model = getattr(config, 'DEEPSEEK_MODEL', 'deepseek-v4-flash')
-        print(f"✅ LLM服务初始化成功（DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知）")
+        print(f"✅ LLM服务初始化成功（DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划 + 实时天气）")
         print(f"   模型: {self.model}")
 
     def is_ready(self):
@@ -53,6 +54,18 @@ class LLMService:
             r'再见', r'拜拜', r'请问', r'可以.*吗', r'帮我', r'知道', r'明白'
         ]
         for pattern in social_patterns:
+            if re.search(pattern, question):
+                return True
+        return False
+
+    def _is_route_question(self, question: str) -> bool:
+        """判断是否为路线规划类问题"""
+        route_patterns = [
+            r'怎么逛', r'怎么玩', r'路线', r'推荐.*路线', r'应该怎么走',
+            r'游览顺序', r'先去哪里', r'怎么安排', r'行程', r'怎么游',
+            r'逛完.*需要多久', r'路线规划', r'怎么走比较顺'
+        ]
+        for pattern in route_patterns:
             if re.search(pattern, question):
                 return True
         return False
@@ -185,6 +198,8 @@ class LLMService:
             "with_children": False,
             "with_elderly": False,
             "time_constraint": "full_day",
+            "weather": "normal",
+            "energy_level": "normal",
             "has_constraint": False
         }
 
@@ -196,14 +211,22 @@ class LLMService:
             context["with_elderly"] = True
             context["has_constraint"] = True
 
-        if re.search(r'半天|半日|只有.*小时|时间紧', question):
+        if re.search(r'半天|半日|只有.*小时', question):
             context["time_constraint"] = "half_day"
             context["has_constraint"] = True
-        elif re.search(r'快速|简单逛|打个卡|路过', question):
+        elif re.search(r'快速|简单逛|打个卡|2.*小时', question):
             context["time_constraint"] = "quick"
             context["has_constraint"] = True
-        elif re.search(r'全天|一整天|深度|慢慢逛', question):
-            context["time_constraint"] = "full_day"
+
+        if re.search(r'下雨|雨|雨天', question):
+            context["weather"] = "rainy"
+            context["has_constraint"] = True
+        elif re.search(r'晒|大太阳|暴晒', question):
+            context["weather"] = "sunny"
+            context["has_constraint"] = True
+
+        if re.search(r'累了|走不动|体力|太累', question):
+            context["energy_level"] = "low"
             context["has_constraint"] = True
 
         return context
@@ -256,28 +279,35 @@ class LLMService:
             return {"emotion": "neutral", "has_emotion": False, "intensity": 0.0, "trigger_words": []}
 
     def _detect_interest(self, question: str, stored_interests: list = None) -> dict:
-        if stored_interests and len(stored_interests) > 0:
-            has_new_interest = False
-            for keyword in config.INTEREST_TO_ROUTE.keys():
-                if keyword in question:
-                    has_new_interest = True
-                    break
-            
-            if not has_new_interest:
-                route_key = stored_interests[-1]
-                route = config.ROUTES.get(route_key)
-                if route:
-                    return {
-                        "has_interest": True,
-                        "route_key": route_key,
-                        "route_name": route["name"],
-                        "spots": route["spots"],
-                        "description": route["description"],
-                        "highlights": route["highlights"],
-                        "matched_keywords": [route_key],
-                        "from_memory": True
-                    }
+        """
+        检测用户兴趣：区分"兴趣切换"和"约束叠加"
+        - 如果用户说"带孩子/带老人"且没有切换信号，保持原有兴趣
+        - 如果用户说"更喜欢/其实更/也喜欢"，切换兴趣
+        """
+        # ===== 检测是否为"补充信息"而非"兴趣切换" =====
+        # 如果问题包含同行人信息（带孩子/带老人），且没有切换信号
+        if re.search(r'孩子|小孩|带.*孩子|带.*老人|亲子|家庭', question):
+            # 检查是否有切换信号
+            has_switch_signal = re.search(r'也喜欢|还喜欢|其实更|更喜欢|但是.*喜欢|不过.*喜欢|更喜欢|更想', question)
+            if not has_switch_signal:
+                # 没有切换信号 → 保持原有兴趣
+                if stored_interests and len(stored_interests) > 0:
+                    route_key = stored_interests[-1]
+                    route = config.ROUTES.get(route_key)
+                    if route:
+                        return {
+                            "has_interest": True,
+                            "route_key": route_key,
+                            "route_name": route["name"],
+                            "spots": route["spots"],
+                            "description": route["description"],
+                            "highlights": route["highlights"],
+                            "matched_keywords": [route_key],
+                            "from_memory": True,
+                            "is_contextual_update": True  # 标记为补充信息
+                        }
 
+        # ===== 检查是否有明确的兴趣切换信号 =====
         matched_interests = []
         route_key = None
         for keyword, route in config.INTEREST_TO_ROUTE.items():
@@ -286,6 +316,7 @@ class LLMService:
                 if route_key is None:
                     route_key = route
 
+        # 如果没有检测到新兴趣
         if route_key is None:
             if stored_interests and len(stored_interests) > 0:
                 route_key = stored_interests[-1]
@@ -339,6 +370,7 @@ class LLMService:
             stored_interests = []
             stored_travel_context = {}
 
+        # ===== 社交问题直接回复 =====
         if self._is_social_question(question):
             answer = self._generate_social_response(question, history)
             if session_id and session_data:
@@ -346,6 +378,7 @@ class LLMService:
                 session_data["history"].append({"role": "assistant", "content": answer})
             return {"success": True, "answer": answer, "error": None}
 
+        # ===== 复用上一轮 context =====
         if not context and last_context:
             print(f"[LLM] 复用上一轮 context")
             context = last_context
@@ -354,26 +387,44 @@ class LLMService:
         if env_context.get("has_info"):
             print(f"[LLM] 检测到环境信息: {env_context}")
 
-        # ===== 检测情绪（细粒度） =====
+        # ===== 获取实时天气 =====
+        weather_service = get_weather_service()
+        weather_summary = weather_service.get_weather_summary()  # 默认无锡
+        if weather_summary:
+            print(f"[LLM] 获取天气信息: {weather_summary}")
+
+        # ===== 检测情绪 =====
         emotion_info = self._detect_emotion(question, history)
         if emotion_info.get("has_emotion"):
             print(f"[LLM] 检测到{emotion_info['emotion']}情绪，触发词: {emotion_info['trigger_words']}")
             if session_data:
                 session_data["last_emotion"] = emotion_info
 
+        # ===== 检测是否为路线类问题 =====
+        is_route_question = self._is_route_question(question)
+
+        # ===== 检测兴趣（区分切换/叠加） =====
         interest_info = self._detect_interest(question, stored_interests)
         print(f"[LLM] 兴趣检测结果: {interest_info.get('route_key') if interest_info.get('has_interest') else '无'}")
+        if interest_info.get("is_contextual_update"):
+            print(f"[LLM] 检测到补充信息（同行人），保持原有兴趣不变")
 
+        # ===== 提取旅游上下文（增强版） =====
         travel_context = self._extract_travel_context_from_question(question)
+        print(f"[LLM] 旅游上下文: {travel_context}")
 
-        if interest_info.get("has_interest") and not interest_info.get("from_memory"):
+        # ===== 保存新兴趣（仅当不是补充信息时） =====
+        if interest_info.get("has_interest") and not interest_info.get("from_memory") and not interest_info.get("is_contextual_update"):
             new_interest = interest_info["route_key"]
             if new_interest not in stored_interests:
                 stored_interests.append(new_interest)
                 if session_data:
                     session_data["interests"] = stored_interests
                     print(f"[LLM] 保存兴趣: {new_interest}")
+        elif interest_info.get("from_memory") and stored_interests:
+            print(f"[LLM] 使用已有兴趣: {stored_interests[-1]}")
 
+        # ===== 保存旅游上下文 =====
         if travel_context.get("has_constraint"):
             merged_travel_context = stored_travel_context.copy()
             if travel_context.get("with_children"):
@@ -382,10 +433,15 @@ class LLMService:
                 merged_travel_context["with_elderly"] = True
             if travel_context.get("time_constraint") in ["half_day", "quick"]:
                 merged_travel_context["time_constraint"] = travel_context["time_constraint"]
+            if travel_context.get("weather") in ["rainy", "sunny"]:
+                merged_travel_context["weather"] = travel_context["weather"]
+            if travel_context.get("energy_level") == "low":
+                merged_travel_context["energy_level"] = "low"
             if session_data:
                 session_data["travel_context"] = merged_travel_context
                 print(f"[LLM] 保存旅游上下文: {merged_travel_context}")
 
+        # ===== 合并已存储的旅游上下文 =====
         final_travel_context = stored_travel_context.copy()
         if travel_context.get("has_constraint"):
             if travel_context.get("with_children"):
@@ -394,6 +450,10 @@ class LLMService:
                 final_travel_context["with_elderly"] = True
             if travel_context.get("time_constraint") in ["half_day", "quick"]:
                 final_travel_context["time_constraint"] = travel_context["time_constraint"]
+            if travel_context.get("weather") in ["rainy", "sunny"]:
+                final_travel_context["weather"] = travel_context["weather"]
+            if travel_context.get("energy_level") == "low":
+                final_travel_context["energy_level"] = "low"
 
         if context and session_data:
             session_data["last_context"] = context
@@ -426,9 +486,22 @@ class LLMService:
 问："灵山大照壁好玩吗"
 答："灵山大照壁被誉为'华夏第一壁'，长39.8米，高7米，正面有赵朴初先生题写的鎏金'灵山胜境'四字，背面刻有《小灵山》诗刻。对于喜欢打卡拍照、感受佛教文化氛围的游客来说，这里是入园后的第一个绝佳打卡点，能拍到湖光壁影同框的美景，值得驻足品味。"
 
+【路线规划规则】（当用户问"怎么逛""有什么推荐路线"时触发）
+1. 首先在知识库中查找"官方路线"信息，获取官方推荐的景点列表和顺序。
+2. 然后根据用户的约束条件进行个性化调整：
+   - 兴趣偏好决定了路线的**主线方向**（自然风光/历史文化/亲子/祈福）。
+   - 如果用户补充了"带孩子/带老人"等信息，这是在**已有路线基础上增加附加条件**，而不是切换到另一条路线。
+   - 例如：用户喜欢自然风光 + 带孩子 → 在自然风光路线中增加适合孩子的景点（如九龙灌浴、百子戏弥勒），而不是完全切换到亲子路线。
+   - 例如：用户喜欢历史文化 + 只有半天时间 → 在历史文化路线中精简景点，保留最核心的3-4个。
+3. 输出格式要求：
+   - 说明"基于您喜欢的XX路线，考虑到您带孩子/老人，做了以下调整"
+   - 每个景点标注建议停留时间
+   - 给出总时长预估
+   - 用清晰的段落分隔
+
 【拒答规则】
 仅当同时满足以下两个条件时，才回复"抱歉，目前知识库中暂无相关信息"：
-1. 用户问题不属于主观体验类问题（即不是"好玩吗/值得去吗/怎么样"等）。
+1. 用户问题不属于主观体验类问题和路线规划类问题。
 2. 知识库中确实找不到任何相关信息。
 
 【回答规则】
@@ -442,7 +515,19 @@ class LLMService:
 2. 每句话用句号、感叹号或问号正常结尾。
 3. 每个完整的段落结束后换行两次，留下空行。
 4. 列出景点时，用"·"或自然衔接，不要使用序号。"""
-        # ===== 注入情绪指令（人性化版） =====
+
+        # ===== 如果是路线问题，在System Prompt中加强路线规划指令 =====
+        if is_route_question:
+            system_prompt += """
+
+【当前任务：路线规划】
+用户正在问关于游览路线的问题。请严格按照以下方式回答：
+1. 首先在知识库中检索"官方路线"数据作为骨架。
+2. 结合用户画像中已存储的兴趣偏好和时间约束。
+3. 输出结构化的路线推荐，包含具体景点、建议时长和顺序。
+4. 不要遗漏官方路线中的核心景点，除非有明确的约束条件（如雨天、时间不足）。"""
+
+        # ===== 注入情绪指令 =====
         if emotion_info.get("has_emotion"):
             if emotion_info["emotion"] == "strong_negative":
                 system_prompt += f"""
@@ -535,10 +620,16 @@ class LLMService:
             user_profile_parts.append("用户时间紧张，推荐路线控制在2-3个核心景点以内。")
 
         if final_travel_context.get("with_children"):
-            user_profile_parts.append("用户带孩子出行，推荐互动性强、路线不宜过长的景点。")
+            user_profile_parts.append("用户带孩子出行，请在已有路线基础上增加互动性强、适合孩子的景点（如九龙灌浴、百子戏弥勒），不要完全切换路线类型。")
 
         if final_travel_context.get("with_elderly"):
-            user_profile_parts.append("用户有老人同行，推荐平缓易行、有休息设施的景点。")
+            user_profile_parts.append("用户有老人同行，请在已有路线基础上选择平缓易行、有休息设施的景点，建议全程观光车。")
+
+        if final_travel_context.get("weather") == "rainy":
+            user_profile_parts.append("当前下雨，请将室外景点替换为室内景点（梵宫、博览馆、五印坛城）。")
+
+        if final_travel_context.get("energy_level") == "low":
+            user_profile_parts.append("用户体力一般，建议全程乘坐观光车，减少步行距离。")
 
         if user_profile_parts:
             system_prompt += f"""
@@ -546,16 +637,27 @@ class LLMService:
 【用户画像】
 {''.join(user_profile_parts)}"""
 
-        # ===== 注入环境信息 =====
+        # ===== 注入环境信息（含天气） =====
+        env_parts = []
         if env_context.get("has_info"):
-            env_parts = []
             if env_context.get("weather") != "unknown":
                 env_parts.append(self._get_weather_adjustment(env_context["weather"]))
             if env_context.get("time") != "unknown":
                 env_parts.append(self._get_time_adjustment(env_context["time"]))
-            
-            if env_parts:
-                system_prompt += f"""
+        
+        # 添加实时天气信息
+        if weather_summary:
+            env_parts.append(f"""
+【实时天气信息】
+{weather_summary}
+
+请根据以上实时天气信息，在推荐路线时做出相应调整：
+- 如果下雨 → 优先推荐室内景点
+- 如果晴天炎热 → 推荐早晚游览室外景点，中午安排室内
+- 如果舒适 → 正常推荐，提醒游客享受好天气""")
+        
+        if env_parts:
+            system_prompt += f"""
 
 {''.join(env_parts)}"""
 

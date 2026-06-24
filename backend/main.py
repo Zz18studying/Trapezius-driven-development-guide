@@ -7,6 +7,7 @@ FastAPI主入口
 import os
 import sys
 import time
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +17,8 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from routers import chat, health, voice
+from routers import chat, health, voice,admin
+from models.database import init_db                    # 添加数据库初始化
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
 
@@ -83,6 +85,18 @@ async def lifespan(app: FastAPI):
 
     print("\n✅ 服务已完全启动，可以处理请求了！")
     print("=" * 60)
+ # ====== 4. 初始化数据库 ======
+    print("\n🗄️ 初始化数据库...")
+    try:
+        init_db()
+        print("   ✅ 数据库初始化完成")
+    except Exception as e:
+        print(f"   ❌ 数据库初始化失败: {e}")
+
+    # ====== 5. 启动话题缓存定时任务 ======
+    print("\n🔄 启动话题缓存定时任务...")
+    asyncio.create_task(background_topic_updater())
+    print("   ✅ 话题缓存任务已启动（每30分钟更新一次）")
 
     yield  # 服务运行中
 
@@ -129,7 +143,7 @@ app.mount("/audio", StaticFiles(directory=audio_dir), name="audio")
 app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(voice.router)
-
+app.include_router(admin.router)
 
 # ==================== 根路径 ====================
 @app.get("/")
@@ -141,6 +155,15 @@ async def root():
         "docs": "/docs"
     }
 
+# ==================== 后台定时任务 ====================
+async def background_topic_updater():
+    from services.topic_service import update_hot_topics_cache
+    # 首次启动后立即更新一次
+    await update_hot_topics_cache()
+    # 之后每30分钟更新一次
+    while True:
+        await asyncio.sleep(1800)  # 30分钟
+        await update_hot_topics_cache()
 
 # ==================== 启动入口 ====================
 if __name__ == "__main__":
