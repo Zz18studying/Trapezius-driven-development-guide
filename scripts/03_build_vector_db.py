@@ -95,6 +95,7 @@ def build_vector_store(faq_list):
 
         documents.append(doc_text)
         metadatas.append({
+             "type": "faq", 
             "question": question,
             "answer": answer,
             "category": category,

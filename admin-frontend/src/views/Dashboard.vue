@@ -91,7 +91,8 @@ const loadData = async () => {
     })
 
     if (res.code === 0) {
-      const { stats, hot_topics } = res.data
+      // 增加默认值，防止后端返回的数据缺失字段
+      const { stats = {}, hot_topics = [] } = res.data
 
       const todayCount = stats.today_count || 0
       const totalConversations = stats.total_conversations || 0
@@ -116,7 +117,12 @@ const loadData = async () => {
       await nextTick()
       // 给浏览器一点时间完成布局
       setTimeout(() => {
-        renderCharts(stats.daily_stats || [])
+        // 仅当有数据时才渲染图表
+        if (stats.daily_stats && stats.daily_stats.length > 0) {
+          renderCharts(stats.daily_stats)
+        } else {
+          console.warn('无 daily_stats 数据，跳过图表渲染')
+        }
       }, 100)
     } else {
       ElMessage.error(res.msg || '数据加载失败')

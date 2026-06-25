@@ -47,9 +47,23 @@ class HotTopicCache(Base):
     id = Column(Integer, primary_key=True, index=True)
     topic = Column(String(50))
     count = Column(Integer)
+    date = Column(String(10), index=True)  # 格式：YYYY-MM-DD
     keywords = Column(Text, nullable=True)  # JSON 数组
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+class KnowledgeDocument(Base):
+    """知识文档表（用于知识库管理）"""
+    __tablename__ = "knowledge_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(255))
+    file_path = Column(String(500))
+    file_type = Column(String(20))  # pdf, docx, txt
+    file_size = Column(Integer)  # 字节
+    status = Column(String(20), default="uploaded")  # uploaded, processing, processed, failed
+    chunk_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 def init_db():
     """初始化数据库，创建所有表"""

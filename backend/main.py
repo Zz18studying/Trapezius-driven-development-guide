@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from routers import chat, health, voice,admin
+from routers import chat, health, voice,admin, knowledge
 from models.database import init_db                    # 添加数据库初始化
 from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
@@ -144,6 +144,7 @@ app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(voice.router)
 app.include_router(admin.router)
+app.include_router(knowledge.router)
 
 # ==================== 根路径 ====================
 @app.get("/")

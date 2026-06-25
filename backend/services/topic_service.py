@@ -8,6 +8,7 @@ import os
 from datetime import datetime, timedelta
 from openai import OpenAI
 from models.database import SessionLocal, Conversation, HotTopicCache
+from sqlalchemy import func
 
 # ==================== DeepSeek API 客户端 ====================
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
@@ -18,6 +19,21 @@ client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com"
 )
+
+
+def get_last_processed_time():
+    """从文件获取上次处理时间"""
+    try:
+        with open("/tmp/last_topic_update.txt", "r") as f:
+            return datetime.fromisoformat(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        # 首次运行或文件损坏，返回30天前
+        return datetime.now() - timedelta(days=30)
+
+
+def save_last_processed_time(dt):
+    with open("/tmp/last_topic_update.txt", "w") as f:
+        f.write(dt.isoformat())
 
 
 # ==================== LLM 聚类函数 ====================
@@ -37,7 +53,6 @@ async def classify_with_llm(questions: list) -> list:
         "祈福体验", "游览建议", "历史故事", "餐饮住宿"
     ]
 
-    # 取前 200 个问题，避免提示词过长
     sample = questions[:200]
 
     prompt = f"""
@@ -64,7 +79,7 @@ async def classify_with_llm(questions: list) -> list:
 
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",  # 使用已验证可用的模型
+            model="deepseek-chat",
             messages=[
                 {"role": "system", "content": "你是一个数据分析专家，只输出JSON，不要有任何额外文字。"},
                 {"role": "user", "content": prompt}
@@ -83,12 +98,11 @@ async def classify_with_llm(questions: list) -> list:
         content = content.strip()
 
         topics = json.loads(content)
-        # 过滤有效话题
         valid_topics = [t for t in topics if t['topic'] in predefined_categories or t['topic'] == "其他"]
         return valid_topics[:10]
     except Exception as e:
         print(f"[话题聚类] LLM 调用失败: {e}")
-        return None  # 返回 None 表示需要降级
+        return None
 
 
 # ==================== 关键词匹配降级方案 ====================
@@ -154,56 +168,84 @@ async def simple_group(questions: list) -> list:
 # ==================== 更新缓存（定时任务调用） ====================
 async def update_hot_topics_cache():
     """
-    从 conversations 表获取最近30天的问题，尝试 LLM 聚类，失败则降级为关键词匹配
+    增量更新：只处理上次更新后新增的对话，累加到缓存中，并清理30天前的数据
     """
+    last_time = get_last_processed_time()
+    now = datetime.now()
+
+    # 1. 获取新增的问题
     db = SessionLocal()
     try:
-        cutoff = datetime.now() - timedelta(days=30)
         results = db.query(Conversation.user_question).filter(
-            Conversation.created_at >= cutoff
+            Conversation.created_at > last_time
         ).all()
         questions = [r[0] for r in results if r[0]]
-        print(f"[话题缓存] 获取到 {len(questions)} 个问题")
+        print(f"[话题缓存] 获取到 {len(questions)} 个新问题（自 {last_time} 以来）")
     finally:
         db.close()
 
     if not questions:
-        print("[话题缓存] 没有新问题，清空缓存")
-        db = SessionLocal()
-        try:
-            db.query(HotTopicCache).delete()
-            db.commit()
-        finally:
-            db.close()
+        print("[话题缓存] 没有新问题，跳过更新")
+        await clean_old_data()
         return
 
-    # 1. 尝试 LLM 聚类（取前 200 个问题）
+    # 2. 对新问题进行分类
     topics = await classify_with_llm(questions[:200])
-
-    # 2. 如果 LLM 失败，使用降级方案
     if not topics:
-        print("[话题缓存] LLM 聚类失败，使用关键词匹配降级方案")
+        print("[话题缓存] LLM 失败，使用降级方案")
         topics = await simple_group(questions)
 
     if not topics:
-        print("[话题缓存] 无任何结果")
+        print("[话题缓存] 无任何结果，跳过更新")
         return
 
-    # 3. 写入缓存表（全量替换）
+    # 3. 累加计数到缓存表（按日期存储）
+    today = now.strftime("%Y-%m-%d")
     db = SessionLocal()
     try:
-        db.query(HotTopicCache).delete()
         for item in topics:
-            cache = HotTopicCache(
-                topic=item["topic"],
-                count=item["count"],
-                keywords=json.dumps(item.get("keywords", []), ensure_ascii=False)
-            )
-            db.add(cache)
+            topic = item["topic"]
+            count = item["count"]
+            record = db.query(HotTopicCache).filter(
+                HotTopicCache.topic == topic,
+                HotTopicCache.date == today
+            ).first()
+            if record:
+                record.count += count
+            else:
+                new_record = HotTopicCache(
+                    topic=topic,
+                    count=count,
+                    date=today,
+                    keywords=json.dumps(item.get("keywords", []), ensure_ascii=False)
+                )
+                db.add(new_record)
         db.commit()
-        print(f"[话题缓存] 已更新 {len(topics)} 条话题")
+        print(f"[话题缓存] 累加完成，更新了 {len(topics)} 个话题的今日计数")
     except Exception as e:
-        print(f"[话题缓存] 更新失败: {e}")
+        print(f"[话题缓存] 累加失败: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+    # 4. 清理30天前的数据
+    await clean_old_data()
+
+    # 5. 更新最后处理时间
+    save_last_processed_time(now)
+
+
+async def clean_old_data():
+    """删除30天前的所有缓存记录"""
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    db = SessionLocal()
+    try:
+        deleted = db.query(HotTopicCache).filter(HotTopicCache.date < cutoff).delete()
+        db.commit()
+        if deleted:
+            print(f"[话题缓存] 清理了 {deleted} 条30天前的记录")
+    except Exception as e:
+        print(f"[话题缓存] 清理失败: {e}")
         db.rollback()
     finally:
         db.close()
@@ -212,11 +254,17 @@ async def update_hot_topics_cache():
 # ==================== 读取缓存（供 API 调用） ====================
 async def get_cached_topics(limit: int = 10) -> list:
     """
-    从缓存表读取话题（供前端 API 调用）
+    查询最近30天的累计话题统计（按 topic 分组求和）
     """
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     db = SessionLocal()
     try:
-        results = db.query(HotTopicCache).order_by(HotTopicCache.count.desc()).limit(limit).all()
-        return [{"topic": r.topic, "count": r.count} for r in results]
+        results = db.query(
+            HotTopicCache.topic,
+            func.sum(HotTopicCache.count).label("total_count")
+        ).filter(HotTopicCache.date >= cutoff).group_by(
+            HotTopicCache.topic
+        ).order_by(func.sum(HotTopicCache.count).desc()).limit(limit).all()
+        return [{"topic": r[0], "count": r[1]} for r in results]
     finally:
         db.close()

@@ -11,29 +11,31 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.db_service import get_dashboard_stats, get_hot_topics_from_cache
+from services.db_service import get_dashboard_stats
+from services.topic_service import get_cached_topics
 
 router = APIRouter(prefix="/api/admin", tags=["管理后台"])
 
 
 @router.get("/dashboard/stats")
-async def get_stats(days: int = 7):
-    """获取仪表盘统计数据（KPI + 趋势）"""
+async def get_stats(days: int = 7, limit: int = 10):
+    """获取仪表盘统计数据（KPI + 趋势 + 热门话题）"""
     stats = get_dashboard_stats(days)
+    topics = await get_cached_topics(limit)
     return {
         "code": 0,
         "data": {
             "stats": stats,
-            "hot_topics": get_hot_topics_from_cache(10)
+            "hot_topics": topics
         },
         "msg": "success"
     }
 
 
 @router.get("/dashboard/hot-topics")
-async def get_hot_topics(limit: int = 5):
-    """获取热门话题 TOP N"""
-    topics = get_hot_topics_from_cache(limit)
+async def get_hot_topics(limit: int = 10):
+    """获取热门话题 TOP N（增量汇总）"""
+    topics = await get_cached_topics(limit)
     return {
         "code": 0,
         "data": topics,
@@ -41,7 +43,7 @@ async def get_hot_topics(limit: int = 5):
     }
 
 
-# 用于测试的模拟数据注入（如果数据库为空，可以返回模拟数据）
+# 模拟数据接口（仅用于前端开发测试，正式环境可移除）
 @router.get("/dashboard/mock")
 async def get_mock_data():
     """返回模拟数据用于前端开发测试"""
