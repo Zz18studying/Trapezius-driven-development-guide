@@ -18,6 +18,7 @@ from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
 from services.db_service import save_conversation
 from services.safe_llm_service import get_safe_llm_service
+from services.sentiment_service import analyze_sentiment
 
 router = APIRouter(prefix="/api/chat", tags=["对话"])
 
@@ -112,6 +113,8 @@ async def ask(request: ChatRequest):
             sources=sources if sources else None,
             error=llm_result['error']
         )
+    # ---- 新增：情感分析 ----
+    sentiment = analyze_sentiment(request.question)   # 默认使用 LLM
 
     # 4. 保存对话记录
     try:
@@ -122,7 +125,7 @@ async def ask(request: ChatRequest):
             answer=llm_result['answer'],
             sources=sources_json,
             response_time=time.time() - total_start,
-            sentiment=None
+            sentiment=sentiment
         )
         print("[API] 对话记录已保存")
     except Exception as e:
@@ -167,7 +170,8 @@ async def ask_verified(request: ChatRequest):
         context=context,
         session_id=request.session_id
     )
-
+    # ---- 新增：情感分析 ----
+    sentiment = analyze_sentiment(request.question)
     # 保存对话记录
     try:
         sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
@@ -177,7 +181,7 @@ async def ask_verified(request: ChatRequest):
             answer=result.get("answer", ""),
             sources=sources_json,
             response_time=time.time() - total_start,
-            sentiment=None
+            sentiment=sentiment
         )
         print("[API] 验证对话记录已保存")
     except Exception as e:
