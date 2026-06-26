@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-大模型调用服务 - 使用 DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划 + 实时天气
+大模型调用服务 - 使用 DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划
 """
 
 import os
@@ -11,7 +11,6 @@ from openai import OpenAI
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
-from services.weather_service import get_weather_service
 
 
 class LLMService:
@@ -29,7 +28,7 @@ class LLMService:
             base_url="https://api.deepseek.com"
         )
         self.model = getattr(config, 'DEEPSEEK_MODEL', 'deepseek-v4-flash')
-        print(f"✅ LLM服务初始化成功（DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划 + 实时天气）")
+        print(f"✅ LLM服务初始化成功（DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划）")
         print(f"   模型: {self.model}")
 
     def is_ready(self):
@@ -387,12 +386,6 @@ class LLMService:
         if env_context.get("has_info"):
             print(f"[LLM] 检测到环境信息: {env_context}")
 
-        # ===== 获取实时天气 =====
-        weather_service = get_weather_service()
-        weather_summary = weather_service.get_weather_summary()  # 默认无锡
-        if weather_summary:
-            print(f"[LLM] 获取天气信息: {weather_summary}")
-
         # ===== 检测情绪 =====
         emotion_info = self._detect_emotion(question, history)
         if emotion_info.get("has_emotion"):
@@ -637,24 +630,13 @@ class LLMService:
 【用户画像】
 {''.join(user_profile_parts)}"""
 
-        # ===== 注入环境信息（含天气） =====
+        # ===== 注入环境信息 =====
         env_parts = []
         if env_context.get("has_info"):
             if env_context.get("weather") != "unknown":
                 env_parts.append(self._get_weather_adjustment(env_context["weather"]))
             if env_context.get("time") != "unknown":
                 env_parts.append(self._get_time_adjustment(env_context["time"]))
-        
-        # 添加实时天气信息
-        if weather_summary:
-            env_parts.append(f"""
-【实时天气信息】
-{weather_summary}
-
-请根据以上实时天气信息，在推荐路线时做出相应调整：
-- 如果下雨 → 优先推荐室内景点
-- 如果晴天炎热 → 推荐早晚游览室外景点，中午安排室内
-- 如果舒适 → 正常推荐，提醒游客享受好天气""")
         
         if env_parts:
             system_prompt += f"""

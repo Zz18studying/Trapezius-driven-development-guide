@@ -116,9 +116,3 @@ INTEREST_TO_ROUTE = {
 }
 
 
-
-# ==================== 天气API配置 ====================
-WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY", "")  # 从环境变量读取
-WEATHER_API_URL = "https://devapi.qweather.com/v7/weather/now"
-WEATHER_CITY_URL = "https://geoapi.qweather.com/v2/city/lookup"  # 城市ID查询
-DEFAULT_CITY = "无锡"  # 灵山胜境所在城市
