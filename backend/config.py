@@ -44,8 +44,8 @@ REQUIRE_VERIFICATION = True
 # ==================== 检索配置 ====================
 DEFAULT_N_RESULTS = 5
 MAX_N_RESULTS = 10
-MIN_SIMILARITY = 0.45  # 采用更严谨的阈值
-FALLBACK_SIMILARITY = 0.3   # 宽松重试阈值，当标准阈值无结果时使用
+MIN_SIMILARITY = 0.35# 采用更严谨的阈值
+FALLBACK_SIMILARITY = 0.25  # 宽松重试阈值，当标准阈值无结果时使用
 
 # ==================== API配置 ====================
 API_TITLE = "灵山胜境AI导游API"
