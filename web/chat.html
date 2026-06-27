@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI导游 · 灵山胜境</title>
     <style>
-        /* ========== 全局重置 ========== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -15,7 +14,6 @@
             display: flex;
         }
 
-        /* ========== 左侧导航栏 ========== */
         .sidebar {
             width: 180px;
             min-height: 100vh;
@@ -85,7 +83,6 @@
             letter-spacing: 1px;
         }
 
-        /* ========== 右侧主内容 ========== */
         .main-content {
             flex: 1;
             display: flex;
@@ -95,7 +92,6 @@
             height: 100vh;
         }
 
-        /* ========== 顶部标题栏 ========== */
         .chat-header {
             display: flex;
             justify-content: space-between;
@@ -136,9 +132,7 @@
             text-overflow: clip;
             white-space: nowrap;
         }
-        .chat-header .session-id:hover {
-            background: #f0f6fa;
-        }
+        .chat-header .session-id:hover { background: #f0f6fa; }
         .chat-header .clear-btn {
             background: rgba(44, 110, 138, 0.08);
             border: none;
@@ -154,7 +148,6 @@
             color: #e74c3c;
         }
 
-        /* ========== 双栏布局：对话 + 数字人 ========== */
         .chat-body {
             flex: 1;
             display: flex;
@@ -163,7 +156,6 @@
             min-height: 0;
         }
 
-        /* 左侧对话区域 */
         .chat-panel {
             flex: 1;
             display: flex;
@@ -240,7 +232,7 @@
         }
 
         .input-area {
-            padding: 12px 16px;
+            padding: 8px 14px;
             border-top: 1px solid rgba(180, 210, 230, 0.3);
             display: flex;
             gap: 10px;
@@ -249,7 +241,7 @@
         }
         .input-area input {
             flex: 1;
-            padding: 10px 16px;
+            padding: 8px 14px;
             border: 1px solid rgba(180, 210, 230, 0.4);
             border-radius: 22px;
             font-size: 14px;
@@ -313,7 +305,6 @@
             transform: none;
         }
 
-        /* 右侧数字人 */
         .digital-panel {
             width: 420px;
             flex-shrink: 0;
@@ -364,7 +355,6 @@
             white-space: nowrap;
         }
 
-        /* ========== 录音提示浮层 ========== */
         .recording-tip {
             position: fixed;
             top: 50%;
@@ -383,7 +373,6 @@
         }
         .recording-tip.active { display: block; }
 
-        /* ========== 响应式 ========== */
         @media (max-width: 1024px) {
             .digital-panel { width: 280px; }
         }
@@ -412,7 +401,6 @@
             .digital-panel { height: 220px; }
         }
     </style>
-    <!-- Live2D 库（已移到 web/lib/） -->
     <script src="lib/pixi.min.js"></script>
     <script src="lib/live2dcubismcore.min.js"></script>
     <script src="lib/cubism4.min.js"></script>
@@ -427,20 +415,19 @@
             <p>智慧导览</p>
         </div>
         <div class="sidebar-nav">
-            <a href="index.html" id="navHome">
+            <a href="javascript:void(0)" onclick="location.href='index.html'">
                 <span class="nav-icon">🏠</span>
                 <span class="nav-label">首页</span>
             </a>
-            <a href="chat.html" id="navChat" class="active">
+            <a href="javascript:void(0)" onclick="location.href='chat.html'" class="active">
                 <span class="nav-icon">🎭</span>
                 <span class="nav-label">AI导游</span>
-                <span class="nav-badge">NEW</span>
             </a>
-            <a href="routes.html" id="navRoutes">
+            <a href="javascript:void(0)" onclick="location.href='routes.html'">
                 <span class="nav-icon">🗺️</span>
                 <span class="nav-label">路线推荐</span>
             </a>
-            <a href="spots.html" id="navSpots">
+            <a href="javascript:void(0)" onclick="location.href='spots.html'">
                 <span class="nav-icon">📍</span>
                 <span class="nav-label">景点列表</span>
             </a>
@@ -451,7 +438,6 @@
     <!-- ===== 主内容区 ===== -->
     <div class="main-content">
 
-        <!-- 顶部标题栏 -->
         <div class="chat-header">
             <div class="title">
                 🎭 AI导游
@@ -463,10 +449,8 @@
             </div>
         </div>
 
-        <!-- 双栏主体 -->
         <div class="chat-body">
 
-            <!-- 对话面板 -->
             <div class="chat-panel">
                 <div class="chat-messages" id="chatMessages">
                     <div class="message assistant">
@@ -486,7 +470,6 @@
                 </div>
             </div>
 
-            <!-- 数字人面板 -->
             <div class="digital-panel">
                 <div class="dh-header">🎭 小灵 · AI导游</div>
                 <div class="dh-canvas-wrapper" id="dhContainer">
@@ -498,23 +481,11 @@
         </div>
     </div>
 
-    <!-- ===== 录音提示浮层 ===== -->
     <div class="recording-tip" id="recordingTip">
         <span style="display:inline-block;animation:pulse 0.5s infinite alternate;">🎙️</span> 正在录音...
     </div>
 
     <script>
-        // ============================================================
-        // 0. 导航栏高亮（当前页面自动高亮）
-        // ============================================================
-        (function highlightNav() {
-            const current = window.location.pathname.split('/').pop() || 'index.html';
-            document.querySelectorAll('.sidebar-nav a').forEach(link => {
-                const href = link.getAttribute('href');
-                link.classList.toggle('active', href === current);
-            });
-        })();
-
         // ============================================================
         // 1. 会话管理
         // ============================================================
@@ -763,7 +734,7 @@
                     this.model.anchor.set(0.5, 0.5);
                     this.model.x = this.app.screen.width / 2;
                     this.model.y = this.app.screen.height / 2;
-                    this.model.scale.set(0.16, 0.16);
+                    this.model.scale.set(0.14,0.14);
 
                     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -944,7 +915,7 @@
                     this.model.x = this.app.screen.width / 2;
                     this.model.y = this.app.screen.height / 2;
                     const scale = Math.min(width, height) / 1000;
-                    this.model.scale.set(scale * 0.16, scale * 0.16);
+                    this.model.scale.set(scale * 0.22, scale * 0.22);
                 } catch(e) {}
             },
 

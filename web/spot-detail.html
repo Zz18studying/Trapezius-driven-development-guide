@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>景点详情 · 灵山胜境</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #eef4f8;
+            color: #1a2a3a;
+            min-height: 100vh;
+            display: flex;
+        }
+
+        .sidebar {
+            width: 180px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a3a4a 0%, #2c6e8a 60%, #3a8aaa 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            padding: 28px 0 20px;
+        }
+        .sidebar-brand {
+            text-align: center;
+            padding: 0 16px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .sidebar-brand .icon {
+            font-size: 36px;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .sidebar-brand h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 3px;
+        }
+        .sidebar-brand p {
+            font-size: 12px;
+            opacity: 0.7;
+            letter-spacing: 4px;
+            margin-top: 2px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 20px 12px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .sidebar-nav a:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+        .sidebar-nav a.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .sidebar-nav a .nav-icon {
+            font-size: 20px;
+            width: 28px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .sidebar-nav a .nav-label {
+            font-size: 14px;
+        }
+        .sidebar-footer {
+            padding: 16px 20px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11px;
+            opacity: 0.5;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 24px 32px 40px;
+            max-width: calc(100% - 180px);
+            overflow-y: auto;
+        }
+
+        .back-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .back-bar .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            border-radius: 20px;
+            background: white;
+            border: 1px solid rgba(44, 110, 138, 0.15);
+            cursor: pointer;
+            font-size: 14px;
+            color: #1a3a4a;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        .back-bar .back-btn:hover {
+            background: #f0f6fa;
+            border-color: #4a90b0;
+        }
+
+        .detail-container {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 🔥 图片放大：从 360px 改为 480px */
+        .detail-container .detail-img {
+            width: 100%;
+            height: 560px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        .detail-container .detail-img .overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 40px 40px 30px;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+            color: white;
+        }
+        .detail-container .detail-img .overlay h1 {
+            font-size: 38px;
+            font-weight: 700;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+        }
+        .detail-container .detail-img .overlay .sub-info {
+            display: flex;
+            gap: 24px;
+            margin-top: 10px;
+            font-size: 15px;
+            opacity: 0.9;
+        }
+        .detail-container .detail-img .overlay .sub-info span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .detail-container .detail-body {
+            padding: 32px 36px 36px;
+        }
+
+        .detail-container .detail-body .detail-section {
+            margin-bottom: 28px;
+        }
+        .detail-container .detail-body .detail-section h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a3a4a;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 2px solid rgba(44, 110, 138, 0.08);
+            padding-bottom: 10px;
+        }
+        .detail-container .detail-body .detail-section p {
+            font-size: 16px;
+            line-height: 1.9;
+            color: #3a5a6a;
+        }
+
+        .detail-container .detail-body .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+        }
+        .detail-container .detail-body .info-grid .info-item {
+            background: #f0f6fa;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border-left: 4px solid #4a90b0;
+        }
+        .detail-container .detail-body .info-grid .info-item .label {
+            font-size: 11px;
+            color: #6a8a9a;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .detail-container .detail-body .info-grid .info-item .value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a3a4a;
+            margin-top: 2px;
+        }
+
+        .detail-tags-wrap {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .detail-tags-wrap .tag {
+            background: #eef4f8;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #4a6a7a;
+            font-weight: 500;
+        }
+
+        .detail-actions {
+            display: flex;
+            gap: 14px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .detail-actions .btn {
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 15px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .detail-actions .btn-primary {
+            background: linear-gradient(135deg, #2c6e8a, #4a90b0);
+            color: white;
+            box-shadow: 0 4px 16px rgba(44, 110, 138, 0.25);
+        }
+        .detail-actions .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(44, 110, 138, 0.35);
+        }
+        .detail-actions .btn-outline {
+            background: transparent;
+            color: #2c6e8a;
+            border: 2px solid #2c6e8a;
+        }
+        .detail-actions .btn-outline:hover {
+            background: #2c6e8a;
+            color: white;
+        }
+        .detail-actions .btn-gold {
+            background: linear-gradient(135deg, #f5af19, #f12711);
+            color: white;
+            box-shadow: 0 4px 16px rgba(241, 39, 17, 0.2);
+        }
+        .detail-actions .btn-gold:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(241, 39, 17, 0.3);
+        }
+        /* 🔥 语音播放中状态 */
+        .detail-actions .btn-gold.playing {
+            animation: pulse-gold 0.8s ease-in-out infinite;
+        }
+        @keyframes pulse-gold {
+            0%,
+            100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 30px rgba(241, 39, 17, 0.4);
+            }
+        }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 820px) {
+            .sidebar {
+                width: 64px;
+                padding: 16px 0 12px;
+            }
+            .sidebar-brand h1,
+            .sidebar-brand p,
+            .sidebar-nav a .nav-label,
+            .sidebar-footer {
+                display: none;
+            }
+            .sidebar-brand .icon {
+                font-size: 28px;
+                margin-bottom: 0;
+            }
+            .sidebar-nav a {
+                justify-content: center;
+                padding: 12px;
+            }
+            .sidebar-nav a .nav-icon {
+                font-size: 22px;
+                width: auto;
+            }
+            .main-content {
+                padding: 16px;
+                max-width: calc(100% - 64px);
+            }
+            .detail-container .detail-img {
+                height: 300px;
+            }
+            .detail-container .detail-img .overlay h1 {
+                font-size: 26px;
+            }
+            .detail-container .detail-img .overlay {
+                padding: 24px 24px 20px;
+            }
+            .detail-container .detail-body {
+                padding: 20px;
+            }
+            .detail-container .detail-body .detail-section p {
+                font-size: 14px;
+            }
+        }
+        @media (max-width: 480px) {
+            .sidebar {
+                width: 52px;
+                padding: 12px 0 10px;
+            }
+            .sidebar-brand .icon {
+                font-size: 22px;
+            }
+            .sidebar-nav a {
+                padding: 10px;
+            }
+            .sidebar-nav a .nav-icon {
+                font-size: 18px;
+            }
+            .main-content {
+                padding: 10px;
+                max-width: calc(100% - 52px);
+            }
+            .detail-container .detail-img {
+                height: 200px;
+            }
+            .detail-container .detail-img .overlay {
+                padding: 16px 16px 14px;
+            }
+            .detail-container .detail-img .overlay h1 {
+                font-size: 20px;
+            }
+            .detail-container .detail-img .overlay .sub-info {
+                font-size: 12px;
+                gap: 14px;
+                flex-wrap: wrap;
+            }
+            .detail-container .detail-body {
+                padding: 14px 14px 18px;
+            }
+            .detail-container .detail-body .detail-section h2 {
+                font-size: 17px;
+            }
+            .detail-container .detail-body .detail-section p {
+                font-size: 13px;
+                line-height: 1.7;
+            }
+            .info-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            .detail-actions .btn {
+                font-size: 13px;
+                padding: 10px 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== 左侧导航栏 ===== -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <span class="icon">🏯</span>
+            <h1>灵山胜境</h1>
+            <p>智慧导览</p>
+        </div>
+        <div class="sidebar-nav">
+            <a href="javascript:void(0)" onclick="location.href='index.html'">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </a>
+            <a href="javascript:void(0)" onclick="location.href='chat.html'">
+                <span class="nav-icon">🎭</span>
+                <span class="nav-label">AI导游</span>
+            </a>
+            <a href="javascript:void(0)" onclick="location.href='routes.html'">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-label">路线推荐</span>
+            </a>
+            <a href="javascript:void(0)" onclick="location.href='spots.html'">
+                <span class="nav-icon">📍</span>
+                <span class="nav-label">景点列表</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">v2.0 · 智慧灵山</div>
+    </nav>
+
+    <!-- ===== 主内容 ===== -->
+    <main class="main-content">
+
+        <div class="back-bar">
+            <a href="javascript:void(0)" onclick="history.back()" class="back-btn">‹ 返回景点列表</a>
+        </div>
+
+        <div class="detail-container" id="detailContainer">
+            <!-- 由 JS 动态渲染 -->
+        </div>
+
+    </main>
+
+    <script>
+        // ============================================================
+        // 景点数据（详细版）
+        // ============================================================
+        const spotsData = [{
+            id: 1,
+            name: '灵山大佛',
+            icon: '🏛️',
+            rating: 4.9,
+            tags: ['必打卡', '祈福', '世界之最'],
+            desc: '88米高青铜大佛，庄严肃穆，是世界上最高的青铜佛像之一。',
+            time: '40min',
+            location: 'A区',
+            visitors: '5000+',
+            image: 'images/banner-dafo.jpg',
+            detail: '灵山大佛坐落于无锡太湖之滨，通高88米，其中佛体高79米，莲花瓣高9米。大佛慈颜微笑，广视众生，右手"施无畏印"代表除却痛苦，左手"与愿印"代表给予快乐。\n\n大佛的建造历时多年，于1997年建成开光，融合了传统佛教艺术与现代建筑技术。大佛内部设有电梯，游客可登顶俯瞰太湖美景。大佛脚下的灵山胜境广场，是举办大型佛教活动的场所。\n\n灵山大佛是世界最高的青铜佛像之一，与四川乐山大佛、香港天坛大佛并称为中国三大佛像。每年吸引数百万游客前来朝拜和观光，是灵山胜境最具标志性的景点。'
+        }, {
+            id: 2,
+            name: '九龙灌浴',
+            icon: '⛲',
+            rating: 4.8,
+            tags: ['定时演出', '必打卡', '震撼'],
+            desc: '大型音乐动态群雕，讲述佛教经典故事，每日定时演出。',
+            time: '30min',
+            location: 'B区',
+            visitors: '3000+',
+            image: 'images/banner-jiulong.jpg',
+            detail: '九龙灌浴是灵山胜境的核心景观之一，以佛教经典"九龙灌浴"故事为蓝本创作。巨大的青铜莲花直径达18米，由九条龙环绕。\n\n演出时，青铜莲花缓缓绽放，九条龙喷出圣水，沐浴太子佛像，配合庄严的佛教音乐和灯光效果，场面震撼人心。整个演出讲述了释迦牟尼诞生时的神圣场景，寓意"佛光普照，众生吉祥"。\n\n每日10:00、14:00定时演出，每场约20分钟。演出结束后，龙口喷出的圣水可用于祈福，是游客必看的精彩项目，也是灵山胜境最受欢迎的动态景观之一。'
+        }, {
+            id: 3,
+            name: '梵宫',
+            icon: '🏯',
+            rating: 4.7,
+            tags: ['文化瑰宝', '佛教艺术', '金碧辉煌'],
+            desc: '佛教艺术殿堂，金碧辉煌，汇集了众多佛教艺术珍品。',
+            time: '60min',
+            location: 'C区',
+            visitors: '4000+',
+            image: 'images/banner-fangong.jpg',
+            detail: '梵宫是灵山胜境的佛教文化艺术殿堂，建筑面积达7万平方米，建筑风格融合了汉传、藏传和南传佛教元素，气势恢宏，金碧辉煌。\n\n内部拥有精美的壁画、雕塑、唐卡和佛教文物，其中最引人注目的是高达30米的"华藏世界"壁画和精美的飞天雕塑。梵宫还设有佛教艺术展厅、禅修室和素斋餐厅，是了解佛教文化艺术的重要场所。\n\n梵宫被誉为"东方卢浮宫"，是佛教艺术与现代建筑完美结合的典范，也是世界佛教论坛的永久会址，每年举办多场佛教文化活动和艺术展览。'
+        }, {
+            id: 4,
+            name: '五印坛城',
+            icon: '🏠',
+            rating: 4.6,
+            tags: ['藏传佛教', '拍照', '神秘'],
+            desc: '藏传佛教风格建筑，神秘庄严，展示了藏传佛教的独特魅力。',
+            time: '30min',
+            location: 'D区',
+            visitors: '2000+',
+            image: 'images/card-wuyin.jpg',
+            detail: '五印坛城是灵山胜境最具异域风情的景点之一，以西藏大昭寺为蓝本建造，完美呈现了藏传佛教建筑的独特风格。坛城外观色彩斑斓，红、白、金三色交织，极具视觉冲击力。\n\n坛城内部分为多个展区，展示了精美的唐卡、佛像、法器和藏式壁画。其中，最珍贵的是由西藏工匠手绘的巨幅唐卡和纯金铸造的佛像。坛城还设有转经筒和祈福区，游客可以体验藏传佛教的祈福仪式。\n\n五印坛城不仅是藏传佛教文化的展示窗口，也是灵山胜境最受欢迎的拍照打卡地之一，色彩斑斓的建筑在蓝天映衬下格外美丽。'
+        }, {
+            id: 5,
+            name: '曼飞龙塔',
+            icon: '🗼',
+            rating: 4.5,
+            tags: ['南传佛教', '异域风情', '拍照'],
+            desc: '南传佛教风格佛塔，造型独特，充满异域风情。',
+            time: '20min',
+            location: 'E区',
+            visitors: '1500+',
+            image: 'images/card-manfeilong.jpg',
+            detail: '曼飞龙塔是南传佛教风格的代表性建筑，塔身洁白如玉，造型优美，融合了傣族和缅甸佛教建筑特色。佛塔高约30米，塔身呈钟形，顶部装饰有精美的金色伞盖和风铃。\n\n佛塔周围种植了热带植物，如棕榈树和凤凰木，营造出浓郁的热带风情。塔下的广场是欣赏佛塔全景的最佳位置，也是拍照留念的热门地点。\n\n曼飞龙塔是了解南传佛教历史和文化的重要窗口，塔内供奉有南传佛教的重要文物和佛像，展现了与汉传佛教、藏传佛教不同的佛教艺术风格。'
+        }, {
+            id: 6,
+            name: '佛博馆',
+            icon: '📚',
+            rating: 4.4,
+            tags: ['佛教文化', '历史', '文物'],
+            desc: '佛教文化博物馆，收藏了众多佛教文物和历史珍品。',
+            time: '45min',
+            location: 'F区',
+            visitors: '1200+',
+            image: 'images/card-fobo.jpg',
+            detail: '佛博馆是灵山胜境的佛教文化博物馆，馆藏丰富，藏品涵盖佛教经典、法器、造像、唐卡、书画等多个门类，总数超过万件。\n\n博物馆通过实物展示、多媒体互动和场景复原等多种方式，系统介绍了佛教的发展历史、主要宗派、文化艺术和传播路径。其中，最珍贵的藏品包括唐代的铜佛像、宋代的佛教经卷和明清时期的皇家佛教法物。\n\n佛博馆不仅是佛教文化爱好者的必访之地，也是研究佛教历史和艺术的重要学术机构，定期举办专题展览和学术讲座，为游客提供了深入了解佛教文化的理想平台。'
+        }];
+
+        // ============================================================
+        // 获取 URL 参数
+        // ============================================================
+        function getUrlParam(name) {
+            const params = new URLSearchParams(window.location.search);
+            return params.get(name);
+        }
+
+        // ============================================================
+        // 🔥 语音讲解（调用后端 TTS）
+        // ============================================================
+        let currentAudio = null;
+
+        function playVoice(text, btnElement) {
+            // 如果已经有音频在播放，先停止
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+                document.querySelectorAll('.btn-gold').forEach(b => b.classList.remove('playing'));
+            }
+
+            // 按钮添加播放状态
+            if (btnElement) {
+                btnElement.classList.add('playing');
+                btnElement.textContent = '⏳ 加载中...';
+            }
+
+            fetch('/api/voice/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, voice_type: 0 })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.audio_url) {
+                        const audio = new Audio(data.audio_url);
+                        currentAudio = audio;
+                        if (btnElement) {
+                            btnElement.textContent = '⏸️ 播放中...';
+                        }
+                        audio.play();
+                        audio.onended = function() {
+                            if (btnElement) {
+                                btnElement.classList.remove('playing');
+                                btnElement.textContent = '▶ 语音讲解';
+                            }
+                            currentAudio = null;
+                        };
+                        audio.onerror = function() {
+                            if (btnElement) {
+                                btnElement.classList.remove('playing');
+                                btnElement.textContent = '▶ 语音讲解';
+                            }
+                            currentAudio = null;
+                            alert('语音播放失败，请稍后重试');
+                        };
+                    } else {
+                        if (btnElement) {
+                            btnElement.classList.remove('playing');
+                            btnElement.textContent = '▶ 语音讲解';
+                        }
+                        alert('语音合成失败，请稍后重试');
+                    }
+                })
+                .catch(err => {
+                    console.error('语音合成失败:', err);
+                    if (btnElement) {
+                        btnElement.classList.remove('playing');
+                        btnElement.textContent = '▶ 语音讲解';
+                    }
+                    alert('语音服务异常，请稍后重试');
+                });
+        }
+
+        // ============================================================
+        // 渲染详情
+        // ============================================================
+        function renderDetail() {
+            const id = parseInt(getUrlParam('id'));
+            const spot = spotsData.find(s => s.id === id);
+
+            if (!spot) {
+                document.getElementById('detailContainer').innerHTML = `
+                        <div style="text-align:center;padding:60px 20px;color:#6a8a9a;">
+                            <div style="font-size:48px;margin-bottom:16px;">😅</div>
+                            <h2>景点未找到</h2>
+                            <p style="margin-top:8px;">请返回景点列表重新选择</p>
+                            <a href="spots.html" style="display:inline-block;margin-top:16px;padding:10px 32px;border-radius:50px;background:#2c6e8a;color:white;text-decoration:none;">返回列表</a>
+                        </div>
+                    `;
+                return;
+            }
+
+            // 将 detail 中的 \n 转换为 <br>
+            const detailHtml = spot.detail.replace(/\n/g, '<br>');
+
+            document.getElementById('detailContainer').innerHTML = `
+                    <div class="detail-img" style="background-image: url('${spot.image}');">
+                        <div class="overlay">
+                            <h1>${spot.icon} ${spot.name}</h1>
+                            <div class="sub-info">
+                                <span>⭐ ${spot.rating}</span>
+                                <span>📍 ${spot.location}</span>
+                                <span>⏱️ ${spot.time}</span>
+                                <span>👥 ${spot.visitors}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-body">
+                        <div class="detail-section">
+                            <h2>📖 景点介绍</h2>
+                            <p>${detailHtml}</p>
+                        </div>
+
+                        <div class="detail-section">
+                            <h2>📋 基本信息</h2>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="label">📍 位置</div>
+                                    <div class="value">${spot.location}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="label">⏱️ 建议游览</div>
+                                    <div class="value">${spot.time}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="label">⭐ 评分</div>
+                                    <div class="value">${spot.rating} / 5.0</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="label">👥 日均游客</div>
+                                    <div class="value">${spot.visitors}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="detail-section">
+                            <h2>🏷️ 标签</h2>
+                            <div class="detail-tags-wrap">
+                                ${spot.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="detail-actions">
+                            <button class="btn btn-primary" onclick="location.href='chat.html'">💬 问小灵</button>
+                            <button class="btn btn-gold" onclick="playVoice('${spot.detail.replace(/'/g, "\\'")}', this)">▶ 语音讲解</button>
+                            <button class="btn btn-outline" onclick="history.back()">‹ 返回列表</button>
+                        </div>
+                    </div>
+                `;
+
+            document.title = `${spot.name} · 灵山胜境`;
+        }
+
+        renderDetail();
+        console.log('📖 景点详情页加载成功');
+    </script>
+
+</body>
+</html>
