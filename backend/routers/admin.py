@@ -186,3 +186,202 @@ async def advanced_report(days: int = 7):
     """
     data = generate_advanced_report(days)
     return {"code": 0, "data": data, "msg": "success"}
+
+
+# ============================================================
+# 对话查询 API
+# ============================================================
+@router.get("/conversations")
+async def get_conversations(
+    date: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    session_id: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50
+):
+    """
+    按日期、情绪、会话ID查询对话记录
+    """
+    from models.database import SessionLocal, Conversation
+    from datetime import datetime
+    
+    db = SessionLocal()
+    try:
+        # 日期过滤
+        if date:
+            try:
+                date_obj = datetime.strptime(date, "%Y-%m-%d")
+                date_start = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+                date_end = date_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+                query = db.query(Conversation).filter(
+                    Conversation.created_at >= date_start,
+                    Conversation.created_at <= date_end
+                )
+            except ValueError:
+                return {"code": 1, "msg": "日期格式错误，请使用 YYYY-MM-DD", "data": None}
+        else:
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            query = db.query(Conversation).filter(Conversation.created_at >= today_start)
+
+        # 情绪过滤
+        if sentiment and sentiment in ["positive", "neutral", "negative"]:
+            query = query.filter(Conversation.sentiment == sentiment)
+
+        # 会话ID模糊搜索
+        if session_id and session_id.strip():
+            query = query.filter(Conversation.session_id.like(f"%{session_id.strip()}%"))
+
+        # 分页
+        total = query.count()
+        offset = (page - 1) * page_size
+        conversations = query.order_by(Conversation.created_at.desc()).offset(offset).limit(page_size).all()
+
+        # 组装数据
+        data = []
+        for c in conversations:
+            data.append({
+                "id": c.id,
+                "session_id": c.session_id,
+                "user_question": c.user_question,
+                "ai_answer": c.ai_answer[:300] + "..." if c.ai_answer and len(c.ai_answer) > 300 else c.ai_answer,
+                "ai_answer_full": c.ai_answer,
+                "sentiment": c.sentiment,
+                "created_at": c.created_at.strftime("%Y-%m-%d %H:%M:%S") if c.created_at else None,
+                "response_time": round(c.response_time, 2) if c.response_time else None
+            })
+
+        # 统计信息
+        stats = {
+            "total": total,
+            "positive": query.filter(Conversation.sentiment == "positive").count(),
+            "neutral": query.filter(Conversation.sentiment == "neutral").count(),
+            "negative": query.filter(Conversation.sentiment == "negative").count()
+        }
+
+        return {
+            "code": 0,
+            "data": {
+                "items": data,
+                "stats": stats,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total + page_size - 1) // page_size
+            },
+            "msg": "success"
+        }
+    except Exception as e:
+        print(f"[对话查询] 错误: {e}")
+        return {"code": 1, "msg": str(e), "data": None}
+    finally:
+        db.close()
+
+
+@router.get("/conversations/by-session")
+async def get_conversations_by_session(
+    date: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20
+):
+    """
+    按 session_id 分组返回完整对话
+    """
+    from models.database import SessionLocal, Conversation
+    from datetime import datetime
+    from collections import defaultdict
+    
+    db = SessionLocal()
+    try:
+        # 日期过滤
+        if date:
+            try:
+                date_obj = datetime.strptime(date, "%Y-%m-%d")
+                date_start = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+                date_end = date_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+                query = db.query(Conversation).filter(
+                    Conversation.created_at >= date_start,
+                    Conversation.created_at <= date_end
+                )
+            except ValueError:
+                return {"code": 1, "msg": "日期格式错误，请使用 YYYY-MM-DD", "data": None}
+        else:
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            query = db.query(Conversation).filter(Conversation.created_at >= today_start)
+
+        # 获取所有对话
+        all_conversations = query.order_by(Conversation.created_at.asc()).all()
+
+        # 按 session_id 分组
+        session_map = defaultdict(list)
+        for c in all_conversations:
+            # 如果情绪筛选不为空，只保留包含该情绪的会话
+            if sentiment and sentiment in ["positive", "neutral", "negative"]:
+                if c.sentiment == sentiment:
+                    session_map[c.session_id].append(c)
+            else:
+                session_map[c.session_id].append(c)
+
+        # 如果情绪筛选不为空，但会话中可能有多条，需要保留完整的会话内容
+        # 但上面的逻辑已经确保只添加了匹配的会话，问题是一个会话可能只有部分消息匹配
+        # 更准确的做法：先找出所有包含匹配情绪的 session_id，再完整加载这些会话
+        if sentiment and sentiment in ["positive", "neutral", "negative"]:
+            # 找出所有包含匹配情绪的 session_id
+            matched_session_ids = set()
+            for c in all_conversations:
+                if c.sentiment == sentiment:
+                    matched_session_ids.add(c.session_id)
+            
+            # 重新加载这些会话的完整内容
+            session_map = defaultdict(list)
+            for c in all_conversations:
+                if c.session_id in matched_session_ids:
+                    session_map[c.session_id].append(c)
+
+        # 转换为列表
+        sessions = []
+        for session_id, convs in session_map.items():
+            sessions.append({
+                "session_id": session_id,
+                "total_turns": len(convs),
+                "sentiment_stats": {
+                    "positive": sum(1 for c in convs if c.sentiment == "positive"),
+                    "neutral": sum(1 for c in convs if c.sentiment == "neutral"),
+                    "negative": sum(1 for c in convs if c.sentiment == "negative")
+                },
+                "conversations": [
+                    {
+                        "turn": idx + 1,
+                        "user_question": c.user_question,
+                        "ai_answer": c.ai_answer,
+                        "sentiment": c.sentiment,
+                        "created_at": c.created_at.strftime("%Y-%m-%d %H:%M:%S") if c.created_at else None,
+                        "response_time": round(c.response_time, 2) if c.response_time else None
+                    }
+                    for idx, c in enumerate(convs)
+                ]
+            })
+
+        # 按时间排序（取最新对话时间）
+        sessions.sort(key=lambda x: x["conversations"][-1]["created_at"] if x["conversations"] else "", reverse=True)
+
+        # 分页
+        total = len(sessions)
+        offset = (page - 1) * page_size
+        paginated_sessions = sessions[offset:offset + page_size]
+
+        return {
+            "code": 0,
+            "data": {
+                "items": paginated_sessions,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total + page_size - 1) // page_size
+            },
+            "msg": "success"
+        }
+    except Exception as e:
+        print(f"[按会话查询] 错误: {e}")
+        return {"code": 1, "msg": str(e), "data": None}
+    finally:
+        db.close()

@@ -138,8 +138,7 @@ audio_dir = "/var/www/Trapezius-driven-development-guide/backend/audio"
 os.makedirs(audio_dir, exist_ok=True)
 app.mount("/audio", StaticFiles(directory=audio_dir), name="audio")
 
-
-# ==================== 注册路由 ====================
+# ==================== 注册路由（必须在静态文件之前） ====================
 app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(voice.router)
@@ -155,6 +154,15 @@ async def root():
         "status": "running",
         "docs": "/docs"
     }
+
+# ==================== 前端网页目录（必须在最后） ====================
+web_dir = "/var/www/Trapezius-driven-development-guide/web"
+if os.path.exists(web_dir):
+    # 静态文件挂载在最后，确保API路由优先匹配
+    app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
+    print(f"✅ 前端网页目录已挂载: {web_dir}")
+else:
+    print(f"⚠️ 前端网页目录不存在: {web_dir}")
 
 # ==================== 后台定时任务 ====================
 async def background_topic_updater():

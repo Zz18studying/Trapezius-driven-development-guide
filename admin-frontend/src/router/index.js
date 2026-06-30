@@ -14,7 +14,8 @@ const routes = [
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/Dashboard.vue') },
       { path: 'knowledge', name: 'Knowledge', component: () => import('@/views/Knowledge.vue') },
       { path: 'sentiment', name: 'Sentiment', component: () => import('@/views/Sentiment.vue') },
-      { path: 'dhconfig', name: 'DhConfig', component: () => import('@/views/DhConfig.vue') }
+      { path: 'dhconfig', name: 'DhConfig', component: () => import('@/views/DhConfig.vue') },
+      { path: 'conversations', name: 'Conversations', component: () => import('@/views/Conversations.vue') }
     ]
   }
 ]

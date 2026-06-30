@@ -30,6 +30,10 @@
           <el-icon><User /></el-icon>
           <span>数字人形象管理</span>
         </el-menu-item>
+        <el-menu-item index="/conversations">
+          <el-icon><ChatLineSquare /></el-icon>
+          <span>对话查询</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -68,17 +72,26 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, PieChart, User } from '@element-plus/icons-vue'
+import { 
+  DataLine, 
+  Document, 
+  PieChart, 
+  User, 
+  ChatLineSquare 
+} from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
+
 const activeMenu = computed(() => route.path)
+
 const routeName = computed(() => {
   const map = {
     '/dashboard': '数据大屏',
     '/knowledge': '知识库管理',
     '/sentiment': '游客感受度报告',
-    '/dhconfig': '数字人形象管理'
+    '/dhconfig': '数字人形象管理',
+    '/conversations': '对话查询'
   }
   return map[route.path] || ''
 })

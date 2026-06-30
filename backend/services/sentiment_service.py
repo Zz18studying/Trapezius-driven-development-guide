@@ -1,30 +1,22 @@
 # -*- coding: utf-8 -*-
 """
 情感分析服务 - 游客感受度分析核心模块
-
-架构：
-- 优先使用 LLM 进行语义级情感分析（准确率 85%~95%）
-- LLM 不可用时自动降级到静态关键词匹配
-- 支持单条分析、统计总览、每日趋势、会话轨迹、高风险识别
-- 提供“表格描述+Prompt”高级报告生成（比赛亮点）
 """
 
 import re
 import json
+import os
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
-from sqlalchemy import func, text
+from sqlalchemy import func
 from models.database import SessionLocal, Conversation
 
 
-# ============================================================
-# 静态关键词分析（降级方案）
-# ============================================================
 def analyze_sentiment_static(text: str) -> str:
-    """基于关键词匹配的静态情感分析（降级方案）"""
     if not text:
         return "neutral"
-
     negative_keywords = [
         "不好", "差", "失望", "不满意", "坑", "太差", "垃圾",
         "没意思", "无聊", "浪费时间", "后悔", "不值", "骗人",
@@ -39,11 +31,9 @@ def analyze_sentiment_static(text: str) -> str:
         "方便", "贴心", "热情", "周到", "值得一去",
         "流连忘返", "不虚此行", "大开眼界"
     ]
-
     text_lower = text.lower()
     neg_score = sum(1 for kw in negative_keywords if kw in text_lower)
     pos_score = sum(1 for kw in positive_keywords if kw in text_lower)
-
     if neg_score > 0 and pos_score == 0:
         return "negative"
     elif pos_score > neg_score:
@@ -54,61 +44,54 @@ def analyze_sentiment_static(text: str) -> str:
         return "neutral"
 
 
-# ============================================================
-# LLM 情感分析（主要方案）
-# ============================================================
 def analyze_sentiment_llm(text: str) -> str:
-    """使用 LLM 进行语义级情感分析"""
     if not text:
         return "neutral"
 
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        print("[情感分析] 未找到 DEEPSEEK_API_KEY，降级到静态")
+        return analyze_sentiment_static(text)
+
+    url = "https://api.deepseek.com/v1/chat/completions"
+    data = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "你是一个情感分析助手。请分析用户对景区的评价，只输出一个词：positive（正面）、neutral（中性）或 negative（负面）。"},
+            {"role": "user", "content": text}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 10
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json; charset=utf-8"
+    }
+    json_data = json.dumps(data, ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(url, data=json_data, headers=headers, method='POST')
     try:
-        from services.llm_service import get_llm_service
-        llm_service = get_llm_service()
-
-        prompt = f"""请分析以下用户对景区的评价情感，只输出一个词：positive、neutral 或 negative。
-
-评价内容：{text}
-
-情感："""
-
-        result = llm_service.chat(
-            question=prompt,
-            context="",
-            session_id="sentiment_analysis"   # 固定值，不保存记忆
-        )
-
-        if result.get('success'):
-            sentiment = result.get('answer', '').strip().lower()
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            sentiment = result['choices'][0]['message']['content'].strip().lower()
             if sentiment in ["positive", "neutral", "negative"]:
                 return sentiment
-
-        return analyze_sentiment_static(text)
     except Exception as e:
-        print(f"[情感分析] LLM 调用失败，降级到静态: {e}")
+        print(f"[情感分析] LLM 调用异常: {e}")
+        # 降级到静态
         return analyze_sentiment_static(text)
 
 
-# ============================================================
-# 统一入口
-# ============================================================
 def analyze_sentiment(text: str, use_llm: bool = True) -> str:
-    """情感分析统一入口"""
     if use_llm:
         return analyze_sentiment_llm(text)
     return analyze_sentiment_static(text)
 
 
-# ============================================================
-# 统计查询
-# ============================================================
 def get_sentiment_overview(days: int = 7) -> Dict[str, Any]:
-    """情感总览统计"""
     db = SessionLocal()
     try:
         cutoff = datetime.now() - timedelta(days=days)
         total = db.query(Conversation).filter(Conversation.created_at >= cutoff).count()
-
         sentiment_counts = {}
         for s in ["positive", "neutral", "negative"]:
             cnt = db.query(Conversation).filter(
@@ -116,7 +99,6 @@ def get_sentiment_overview(days: int = 7) -> Dict[str, Any]:
                 Conversation.sentiment == s
             ).count()
             sentiment_counts[s] = cnt
-
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_total = db.query(Conversation).filter(Conversation.created_at >= today_start).count()
         today_sentiment = {}
@@ -126,15 +108,12 @@ def get_sentiment_overview(days: int = 7) -> Dict[str, Any]:
                 Conversation.sentiment == s
             ).count()
             today_sentiment[s] = cnt
-
         avg_response = db.query(func.avg(Conversation.response_time)).filter(
             Conversation.created_at >= cutoff
         ).scalar() or 0.0
-
         positive_rate = round(sentiment_counts["positive"] / max(total, 1) * 100, 2)
         negative_rate = round(sentiment_counts["negative"] / max(total, 1) * 100, 2)
         neutral_rate = round(sentiment_counts["neutral"] / max(total, 1) * 100, 2)
-
         return {
             "total_conversations": total,
             "today_conversations": today_total,
@@ -150,7 +129,6 @@ def get_sentiment_overview(days: int = 7) -> Dict[str, Any]:
 
 
 def get_sentiment_trend(days: int = 7) -> List[Dict[str, Any]]:
-    """每日情感趋势"""
     db = SessionLocal()
     try:
         trend = []
@@ -158,7 +136,6 @@ def get_sentiment_trend(days: int = 7) -> List[Dict[str, Any]]:
             date = datetime.now() - timedelta(days=i)
             date_start = date.replace(hour=0, minute=0, second=0, microsecond=0)
             date_end = date.replace(hour=23, minute=59, second=59, microsecond=999999)
-
             positive = db.query(Conversation).filter(
                 Conversation.created_at >= date_start,
                 Conversation.created_at <= date_end,
@@ -174,7 +151,6 @@ def get_sentiment_trend(days: int = 7) -> List[Dict[str, Any]]:
                 Conversation.created_at <= date_end,
                 Conversation.sentiment == "negative"
             ).count()
-
             trend.append({
                 "date": date.strftime("%Y-%m-%d"),
                 "positive": positive,
@@ -186,18 +162,13 @@ def get_sentiment_trend(days: int = 7) -> List[Dict[str, Any]]:
         db.close()
 
 
-# ============================================================
-# 会话维度流式分析
-# ============================================================
 def get_session_sentiment_trajectory(session_id: str) -> Dict[str, Any]:
-    """单个会话的情绪轨迹"""
     db = SessionLocal()
     try:
         convs = db.query(Conversation).filter(
             Conversation.session_id == session_id,
             Conversation.sentiment.isnot(None)
         ).order_by(Conversation.created_at).all()
-
         if len(convs) < 2:
             return {
                 "session_id": session_id,
@@ -207,20 +178,17 @@ def get_session_sentiment_trajectory(session_id: str) -> Dict[str, Any]:
                 "direction": "insufficient_data",
                 "trajectory": [c.sentiment for c in convs]
             }
-
         start = convs[0].sentiment
         end = convs[-1].sentiment
         score_map = {"positive": 1, "neutral": 0, "negative": -1}
         start_score = score_map.get(start, 0)
         end_score = score_map.get(end, 0)
-
         if end_score > start_score:
             direction = "improving"
         elif end_score < start_score:
             direction = "declining"
         else:
             direction = "stable"
-
         return {
             "session_id": session_id,
             "total_turns": len(convs),
@@ -234,7 +202,6 @@ def get_session_sentiment_trajectory(session_id: str) -> Dict[str, Any]:
 
 
 def get_high_risk_sessions(days: int = 7, threshold: int = 2) -> List[Dict[str, Any]]:
-    """识别高风险会话（负面持续下降）"""
     db = SessionLocal()
     try:
         cutoff = datetime.now() - timedelta(days=days)
@@ -243,7 +210,6 @@ def get_high_risk_sessions(days: int = 7, threshold: int = 2) -> List[Dict[str, 
             Conversation.session_id.isnot(None),
             Conversation.session_id != "unknown"
         ).distinct().all()
-
         high_risk = []
         for (session_id,) in sessions:
             traj = get_session_sentiment_trajectory(session_id)
@@ -265,7 +231,6 @@ def get_high_risk_sessions(days: int = 7, threshold: int = 2) -> List[Dict[str, 
 
 
 def get_session_history(session_id: str) -> List[Dict[str, Any]]:
-    """获取会话完整对话历史"""
     db = SessionLocal()
     try:
         convs = db.query(Conversation).filter(
@@ -285,11 +250,7 @@ def get_session_history(session_id: str) -> List[Dict[str, Any]]:
         db.close()
 
 
-# ============================================================
-# 生成服务建议（简单版）
-# ============================================================
 def generate_suggestions(overview: Dict[str, Any], trend: List[Dict]) -> List[Dict[str, Any]]:
-    """基于统计数据生成改进建议"""
     suggestions = []
     negative_rate = overview.get("negative_rate", 0)
     positive_rate = overview.get("positive_rate", 0)
@@ -345,20 +306,11 @@ def generate_suggestions(overview: Dict[str, Any], trend: List[Dict]) -> List[Di
     return suggestions
 
 
-# ============================================================
-# 高级报告生成（表格描述+Prompt，比赛亮点）
-# ============================================================
 def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
-    """
-    生成自然语言管理报告（结合表格描述和 Prompt）
-    返回：原始数据 + LLM 生成的文字报告
-    """
-    # 1. 获取原始统计数据
     overview = get_sentiment_overview(days)
     trend = get_sentiment_trend(days)
     high_risk = get_high_risk_sessions(days, threshold=2)
 
-    # 2. 构造“表格描述” Prompt
     table_desc = f"""
 【数据库表说明】
 - 表名：conversations（对话记录）
@@ -396,23 +348,34 @@ def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
 报告要专业、简洁、有洞察力。
 """
 
-    # 3. 调用 LLM 生成报告
     report_text = ""
-    try:
-        from services.llm_service import get_llm_service
-        llm_service = get_llm_service()
-        result = llm_service.chat(
-            question=prompt,
-            context="",
-             session_id="report_generation"   # 固定值，不保存记忆
-        )
-        if result.get('success'):
-            report_text = result.get('answer', '')
-        else:
-            report_text = "（报告生成失败，请检查LLM服务）"
-    except Exception as e:
-        print(f"[高级报告] LLM调用异常: {e}")
-        report_text = "（报告生成服务暂时不可用）"
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        report_text = "（未配置 DEEPSEEK_API_KEY，无法生成报告）"
+    else:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": "你是一个景区管理专家，请根据数据生成专业报告。"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2000
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json; charset=utf-8"
+        }
+        json_data = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(url, data=json_data, headers=headers, method='POST')
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                report_text = result['choices'][0]['message']['content']
+        except Exception as e:
+            print(f"[高级报告] LLM调用异常: {e}")
+            report_text = "（报告生成服务暂时不可用）"
 
     return {
         "raw_data": {
