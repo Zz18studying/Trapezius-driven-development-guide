@@ -141,7 +141,7 @@
             box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
         }
 
-        /* 🔥 图片放大：从 360px 改为 480px */
+        /* 图片放大：从 360px 改为 480px */
         .detail-container .detail-img {
             width: 100%;
             height: 560px;
@@ -284,7 +284,7 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 24px rgba(241, 39, 17, 0.3);
         }
-        /* 🔥 语音播放中状态 */
+        /* 语音播放中状态 */
         .detail-actions .btn-gold.playing {
             animation: pulse-gold 0.8s ease-in-out infinite;
         }
@@ -395,6 +395,7 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="theme.css">
 </head>
 <body>
 
@@ -430,7 +431,7 @@
     <main class="main-content">
 
         <div class="back-bar">
-            <a href="javascript:void(0)" onclick="history.back()" class="back-btn">‹ 返回景点列表</a>
+            <a href="javascript:void(0)" onclick="history.back()" class="back-btn">返回景点列表</a>
         </div>
 
         <div class="detail-container" id="detailContainer">
@@ -446,7 +447,7 @@
         const spotsData = [{
             id: 1,
             name: '灵山大佛',
-            icon: '🏛️',
+            icon: 'NO.1',
             rating: 4.9,
             tags: ['必打卡', '祈福', '世界之最'],
             desc: '88米高青铜大佛，庄严肃穆，是世界上最高的青铜佛像之一。',
@@ -458,7 +459,7 @@
         }, {
             id: 2,
             name: '九龙灌浴',
-            icon: '⛲',
+            icon: 'SHOW',
             rating: 4.8,
             tags: ['定时演出', '必打卡', '震撼'],
             desc: '大型音乐动态群雕，讲述佛教经典故事，每日定时演出。',
@@ -470,7 +471,7 @@
         }, {
             id: 3,
             name: '梵宫',
-            icon: '🏯',
+            icon: 'ART',
             rating: 4.7,
             tags: ['文化瑰宝', '佛教艺术', '金碧辉煌'],
             desc: '佛教艺术殿堂，金碧辉煌，汇集了众多佛教艺术珍品。',
@@ -482,7 +483,7 @@
         }, {
             id: 4,
             name: '五印坛城',
-            icon: '🏠',
+            icon: 'TIBET',
             rating: 4.6,
             tags: ['藏传佛教', '拍照', '神秘'],
             desc: '藏传佛教风格建筑，神秘庄严，展示了藏传佛教的独特魅力。',
@@ -494,7 +495,7 @@
         }, {
             id: 5,
             name: '曼飞龙塔',
-            icon: '🗼',
+            icon: 'TOWER',
             rating: 4.5,
             tags: ['南传佛教', '异域风情', '拍照'],
             desc: '南传佛教风格佛塔，造型独特，充满异域风情。',
@@ -506,7 +507,7 @@
         }, {
             id: 6,
             name: '佛博馆',
-            icon: '📚',
+            icon: 'MUSEUM',
             rating: 4.4,
             tags: ['佛教文化', '历史', '文物'],
             desc: '佛教文化博物馆，收藏了众多佛教文物和历史珍品。',
@@ -526,7 +527,7 @@
         }
 
         // ============================================================
-        // 🔥 语音讲解（调用后端 TTS）
+        // 语音讲解（调用后端 TTS）
         // ============================================================
         let currentAudio = null;
 
@@ -541,7 +542,7 @@
             // 按钮添加播放状态
             if (btnElement) {
                 btnElement.classList.add('playing');
-                btnElement.textContent = '⏳ 加载中...';
+                btnElement.textContent = '加载中...';
             }
 
             fetch('/api/voice/tts', {
@@ -555,20 +556,20 @@
                         const audio = new Audio(data.audio_url);
                         currentAudio = audio;
                         if (btnElement) {
-                            btnElement.textContent = '⏸️ 播放中...';
+                            btnElement.textContent = '播放中...';
                         }
                         audio.play();
                         audio.onended = function() {
                             if (btnElement) {
                                 btnElement.classList.remove('playing');
-                                btnElement.textContent = '▶ 语音讲解';
+                                btnElement.textContent = '语音讲解';
                             }
                             currentAudio = null;
                         };
                         audio.onerror = function() {
                             if (btnElement) {
                                 btnElement.classList.remove('playing');
-                                btnElement.textContent = '▶ 语音讲解';
+                                btnElement.textContent = '语音讲解';
                             }
                             currentAudio = null;
                             alert('语音播放失败，请稍后重试');
@@ -576,7 +577,7 @@
                     } else {
                         if (btnElement) {
                             btnElement.classList.remove('playing');
-                            btnElement.textContent = '▶ 语音讲解';
+                            btnElement.textContent = '语音讲解';
                         }
                         alert('语音合成失败，请稍后重试');
                     }
@@ -585,7 +586,7 @@
                     console.error('语音合成失败:', err);
                     if (btnElement) {
                         btnElement.classList.remove('playing');
-                        btnElement.textContent = '▶ 语音讲解';
+                        btnElement.textContent = '语音讲解';
                     }
                     alert('语音服务异常，请稍后重试');
                 });
@@ -601,7 +602,7 @@
             if (!spot) {
                 document.getElementById('detailContainer').innerHTML = `
                         <div style="text-align:center;padding:60px 20px;color:#6a8a9a;">
-                            <div style="font-size:48px;margin-bottom:16px;">😅</div>
+                            <div style="font-size:18px;font-weight:700;margin-bottom:16px;">未找到景点</div>
                             <h2>景点未找到</h2>
                             <p style="margin-top:8px;">请返回景点列表重新选择</p>
                             <a href="spots.html" style="display:inline-block;margin-top:16px;padding:10px 32px;border-radius:50px;background:#2c6e8a;color:white;text-decoration:none;">返回列表</a>
@@ -618,52 +619,52 @@
                         <div class="overlay">
                             <h1>${spot.icon} ${spot.name}</h1>
                             <div class="sub-info">
-                                <span>⭐ ${spot.rating}</span>
-                                <span>📍 ${spot.location}</span>
-                                <span>⏱️ ${spot.time}</span>
-                                <span>👥 ${spot.visitors}</span>
+                                <span>评分 ${spot.rating}</span>
+                                <span>位置 ${spot.location}</span>
+                                <span>建议 ${spot.time}</span>
+                                <span>热度 ${spot.visitors}</span>
                             </div>
                         </div>
                     </div>
                     <div class="detail-body">
                         <div class="detail-section">
-                            <h2>📖 景点介绍</h2>
+                            <h2>景点介绍</h2>
                             <p>${detailHtml}</p>
                         </div>
 
                         <div class="detail-section">
-                            <h2>📋 基本信息</h2>
+                            <h2>基本信息</h2>
                             <div class="info-grid">
                                 <div class="info-item">
-                                    <div class="label">📍 位置</div>
+                                    <div class="label">位置</div>
                                     <div class="value">${spot.location}</div>
                                 </div>
                                 <div class="info-item">
-                                    <div class="label">⏱️ 建议游览</div>
+                                    <div class="label">建议游览</div>
                                     <div class="value">${spot.time}</div>
                                 </div>
                                 <div class="info-item">
-                                    <div class="label">⭐ 评分</div>
+                                    <div class="label">评分</div>
                                     <div class="value">${spot.rating} / 5.0</div>
                                 </div>
                                 <div class="info-item">
-                                    <div class="label">👥 日均游客</div>
+                                    <div class="label">日均游客</div>
                                     <div class="value">${spot.visitors}</div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="detail-section">
-                            <h2>🏷️ 标签</h2>
+                            <h2>标签</h2>
                             <div class="detail-tags-wrap">
                                 ${spot.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
                             </div>
                         </div>
 
                         <div class="detail-actions">
-                            <button class="btn btn-primary" onclick="location.href='chat.html'">💬 问小灵</button>
-                            <button class="btn btn-gold" onclick="playVoice('${spot.detail.replace(/'/g, "\\'")}', this)">▶ 语音讲解</button>
-                            <button class="btn btn-outline" onclick="history.back()">‹ 返回列表</button>
+                            <button class="btn btn-primary" onclick="location.href='chat.html'">问小灵</button>
+                            <button class="btn btn-gold" onclick="playVoice('${spot.detail.replace(/'/g, "\\'")}', this)">语音讲解</button>
+                            <button class="btn btn-outline" onclick="history.back()">返回列表</button>
                         </div>
                     </div>
                 `;
@@ -672,7 +673,7 @@
         }
 
         renderDetail();
-        console.log('📖 景点详情页加载成功');
+        console.log('景点详情页加载成功');
     </script>
 
 </body>

@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路线推荐 - 灵山胜境智慧导览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+            min-height: 100vh;
+            display: flex;
+            color: #183243;
+            background: #edf4f7;
+        }
+
+        .sidebar {
+            width: 180px;
+            min-height: 100vh;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 28px 0 20px;
+            color: #fff;
+            background: linear-gradient(180deg, #173846 0%, #2c6f8a 62%, #3a8eaa 100%);
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+        }
+
+        .sidebar-brand {
+            text-align: center;
+            padding: 0 16px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .sidebar-brand .icon {
+            display: block;
+            font-size: 34px;
+            margin-bottom: 6px;
+        }
+
+        .sidebar-brand h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 3px;
+        }
+
+        .sidebar-brand p {
+            margin-top: 2px;
+            font-size: 12px;
+            opacity: 0.72;
+            letter-spacing: 4px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 20px 12px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.72);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: 0.25s ease;
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .sidebar-nav a.active {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .nav-icon {
+            width: 28px;
+            text-align: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .nav-label {
+            font-size: 14px;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11px;
+            opacity: 0.52;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        .main-content {
+            flex: 1;
+            max-width: calc(100% - 180px);
+            padding: 22px 32px 36px;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            min-height: 260px;
+            border-radius: 18px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            padding: 34px;
+            background-image: linear-gradient(90deg, rgba(9, 29, 42, 0.78), rgba(9, 29, 42, 0.28)), url("images/banner-panorama.jpg");
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 12px 36px rgba(34, 91, 116, 0.16);
+        }
+
+        .page-header-content {
+            color: #fff;
+            max-width: 760px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(8px);
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .page-header h2 {
+            font-size: 34px;
+            line-height: 1.2;
+            letter-spacing: 0;
+            margin-bottom: 10px;
+        }
+
+        .page-header p {
+            font-size: 15px;
+            line-height: 1.8;
+            opacity: 0.92;
+        }
+
+        .quick-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 12px;
+            margin: -28px 22px 24px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(44, 110, 138, 0.08);
+            border-radius: 8px;
+            padding: 14px 16px;
+            box-shadow: 0 8px 24px rgba(44, 110, 138, 0.1);
+        }
+
+        .stat-item .value {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1d5c76;
+        }
+
+        .stat-item .label {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #668494;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 22px;
+            align-items: start;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #173846;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tabs button {
+            border: 1px solid rgba(44, 110, 138, 0.12);
+            background: #fff;
+            color: #426678;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .filter-tabs button:hover,
+        .filter-tabs button.active {
+            background: #2c6e8a;
+            color: #fff;
+            border-color: #2c6e8a;
+            box-shadow: 0 8px 20px rgba(44, 110, 138, 0.16);
+        }
+
+        .routes-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .route-card {
+            display: grid;
+            grid-template-columns: 210px minmax(0, 1fr);
+            min-height: 190px;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(44, 110, 138, 0.08);
+            box-shadow: 0 4px 18px rgba(31, 74, 94, 0.06);
+            cursor: pointer;
+            transition: 0.28s ease;
+        }
+
+        .route-card:hover,
+        .route-card.active {
+            transform: translateY(-3px);
+            box-shadow: 0 14px 34px rgba(44, 110, 138, 0.14);
+            border-color: rgba(44, 110, 138, 0.24);
+        }
+
+        .route-image {
+            position: relative;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .route-image::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(12, 31, 43, 0.05), rgba(12, 31, 43, 0.56));
+        }
+
+        .route-badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 1;
+            padding: 5px 10px;
+            border-radius: 999px;
+            color: #fff;
+            font-size: 12px;
+            background: rgba(11, 39, 52, 0.72);
+            backdrop-filter: blur(6px);
+        }
+
+        .route-body {
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .route-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .route-title h3 {
+            font-size: 19px;
+            color: #173846;
+            margin-bottom: 6px;
+        }
+
+        .route-title p {
+            color: #627f8f;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .match-score {
+            flex-shrink: 0;
+            min-width: 64px;
+            text-align: center;
+            padding: 7px 10px;
+            border-radius: 8px;
+            background: #f2f8fb;
+            color: #1d5c76;
+            font-weight: 800;
+            font-size: 16px;
+        }
+
+        .match-score span {
+            display: block;
+            font-size: 10px;
+            color: #7d99a8;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        .route-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .route-meta span,
+        .route-tags span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .route-meta span {
+            padding: 5px 10px;
+            background: #eef5f8;
+            color: #456b7e;
+        }
+
+        .route-path {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #294e61;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+
+        .route-path .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #2c6e8a;
+            flex-shrink: 0;
+        }
+
+        .route-path .line {
+            width: 24px;
+            height: 1px;
+            background: #b7ccd6;
+        }
+
+        .route-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: auto;
+        }
+
+        .route-tags span {
+            padding: 4px 9px;
+            color: #8b5a09;
+            background: #fff5df;
+        }
+
+        .side-panel {
+            position: sticky;
+            top: 22px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .panel-card {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid rgba(44, 110, 138, 0.08);
+            box-shadow: 0 4px 18px rgba(31, 74, 94, 0.06);
+            overflow: hidden;
+        }
+
+        .panel-hero {
+            height: 150px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .panel-hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent, rgba(9, 29, 42, 0.76));
+        }
+
+        .panel-hero h3 {
+            position: absolute;
+            left: 18px;
+            right: 18px;
+            bottom: 16px;
+            z-index: 1;
+            color: #fff;
+            font-size: 20px;
+        }
+
+        .panel-body {
+            padding: 18px;
+        }
+
+        .panel-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .summary-item {
+            border-radius: 8px;
+            background: #f1f7fa;
+            padding: 10px 8px;
+            text-align: center;
+        }
+
+        .summary-item strong {
+            display: block;
+            color: #1d5c76;
+            font-size: 15px;
+            margin-bottom: 3px;
+        }
+
+        .summary-item span {
+            color: #7792a0;
+            font-size: 11px;
+        }
+
+        .timeline {
+            position: relative;
+            display: grid;
+            gap: 12px;
+        }
+
+        .timeline::before {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 10px;
+            bottom: 10px;
+            width: 2px;
+            background: #d8e7ee;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            left: 2px;
+            top: 5px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid #2c6e8a;
+            z-index: 1;
+        }
+
+        .timeline-item h4 {
+            font-size: 14px;
+            color: #173846;
+            margin-bottom: 3px;
+        }
+
+        .timeline-item p {
+            color: #6f8998;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .notice-card {
+            padding: 18px;
+        }
+
+        .notice-card h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #173846;
+        }
+
+        .notice-list {
+            display: grid;
+            gap: 10px;
+            color: #587889;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .btn {
+            flex: 1;
+            border: none;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: 0.25s ease;
+        }
+
+        .btn-primary {
+            color: #fff;
+            background: linear-gradient(135deg, #2c6e8a, #4b9aba);
+            box-shadow: 0 8px 20px rgba(44, 110, 138, 0.22);
+        }
+
+        .btn-light {
+            color: #2c6e8a;
+            background: #eef6fa;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 1180px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .side-panel {
+                position: static;
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 820px) {
+            .sidebar {
+                width: 64px;
+                padding: 16px 0 12px;
+            }
+
+            .sidebar-brand h1,
+            .sidebar-brand p,
+            .nav-label,
+            .sidebar-footer {
+                display: none;
+            }
+
+            .sidebar-brand {
+                padding: 0 10px 20px;
+            }
+
+            .sidebar-brand .icon {
+                font-size: 28px;
+                margin-bottom: 0;
+            }
+
+            .sidebar-nav a {
+                justify-content: center;
+                padding: 12px;
+            }
+
+            .nav-icon {
+                width: auto;
+                font-size: 22px;
+            }
+
+            .main-content {
+                max-width: calc(100% - 64px);
+                padding: 16px;
+            }
+
+            .page-header {
+                min-height: 230px;
+                padding: 24px;
+            }
+
+            .page-header h2 {
+                font-size: 26px;
+            }
+
+            .quick-stats {
+                grid-template-columns: repeat(2, 1fr);
+                margin: 14px 0 22px;
+            }
+
+            .route-card {
+                grid-template-columns: 1fr;
+            }
+
+            .route-image {
+                height: 170px;
+            }
+
+            .side-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .sidebar {
+                width: 52px;
+                padding: 12px 0 10px;
+            }
+
+            .sidebar-brand .icon {
+                font-size: 22px;
+            }
+
+            .sidebar-nav a {
+                padding: 10px;
+            }
+
+            .nav-icon {
+                font-size: 18px;
+            }
+
+            .main-content {
+                max-width: calc(100% - 52px);
+                padding: 10px;
+            }
+
+            .page-header {
+                min-height: 210px;
+                border-radius: 12px;
+                padding: 18px;
+            }
+
+            .page-header h2 {
+                font-size: 22px;
+            }
+
+            .page-header p {
+                font-size: 13px;
+            }
+
+            .quick-stats {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .stat-item {
+                padding: 10px 12px;
+            }
+
+            .route-body,
+            .panel-body,
+            .notice-card {
+                padding: 14px;
+            }
+
+            .route-top {
+                flex-direction: column;
+            }
+
+            .match-score {
+                text-align: left;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <span class="icon">🏯</span>
+            <h1>灵山胜境</h1>
+            <p>智慧导览</p>
+        </div>
+        <div class="sidebar-nav">
+            <a href="index.html">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </a>
+            <a href="chat.html">
+                <span class="nav-icon">🎭</span>
+                <span class="nav-label">AI导游</span>
+            </a>
+            <a href="routes.html" class="active">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-label">路线推荐</span>
+            </a>
+            <a href="spots.html">
+                <span class="nav-icon">📍</span>
+                <span class="nav-label">景点列表</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">v2.0 · 智慧灵山</div>
+    </nav>
+
+    <main class="main-content">
+        <section class="page-header">
+            <div class="page-header-content">
+                <div class="eyebrow">路线推荐 · 灵山胜境</div>
+                <h2>按时间、体力和兴趣，快速匹配今日游览路线</h2>
+                <p>精选经典礼佛、亲子轻松、文化深度和摄影打卡路线，帮助游客在有限时间里更顺畅地完成游览。</p>
+            </div>
+        </section>
+
+        <section class="quick-stats">
+            <div class="stat-item">
+                <div class="value">4 条</div>
+                <div class="label">推荐路线</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">2-5h</div>
+                <div class="label">覆盖时长</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">6 处</div>
+                <div class="label">核心景点</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">低-中</div>
+                <div class="label">步行强度</div>
+            </div>
+        </section>
+
+        <section class="content-grid">
+            <div>
+                <div class="toolbar">
+                    <h2 class="section-title">推荐路线</h2>
+                    <div class="filter-tabs" aria-label="路线筛选">
+                        <button class="active" data-filter="all">全部</button>
+                        <button data-filter="classic">经典</button>
+                        <button data-filter="family">亲子</button>
+                        <button data-filter="culture">文化</button>
+                        <button data-filter="photo">摄影</button>
+                    </div>
+                </div>
+
+                <div class="routes-list" id="routesList"></div>
+            </div>
+
+            <aside class="side-panel">
+                <div class="panel-card" id="detailPanel"></div>
+
+                <div class="panel-card notice-card">
+                    <h3>出行提示</h3>
+                    <div class="notice-list">
+                        <p>九龙灌浴为定时表演，建议提前 15 分钟抵达表演区域。</p>
+                        <p>路线时长按正常步行与短暂停留估算，节假日可适当预留排队时间。</p>
+                        <p>携老人、儿童出行时，优先选择亲子轻松游或减少深度路线停留点。</p>
+                    </div>
+                    <div class="action-row">
+                        <a class="btn btn-primary" href="spots.html">查看景点</a>
+                        <a class="btn btn-light" href="chat.html">问 AI 导游</a>
+                    </div>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const routes = [
+            {
+                id: "classic",
+                type: "classic",
+                badge: "人气最高",
+                title: "经典一日礼佛线",
+                desc: "覆盖灵山胜境代表景观，适合第一次到访、希望完整体验核心景点的游客。",
+                score: 98,
+                distance: "3.5km",
+                duration: "约4小时",
+                intensity: "中等",
+                image: "images/banner-panorama.jpg",
+                tags: ["首次到访", "核心景点", "礼佛祈福"],
+                path: ["入口广场", "灵山大佛", "九龙灌浴", "梵宫", "五印坛城"],
+                notes: ["大佛区域停留 45 分钟", "九龙灌浴建议卡点观看", "梵宫适合安排较长参观时间"]
+            },
+            {
+                id: "family",
+                type: "family",
+                badge: "轻松省力",
+                title: "亲子轻松游",
+                desc: "缩短步行距离，减少高强度停留，让老人、儿童也能舒适完成主要游览。",
+                score: 92,
+                distance: "2.2km",
+                duration: "约2.5小时",
+                intensity: "较低",
+                image: "images/banner-jiulong.jpg",
+                tags: ["亲子友好", "节奏舒缓", "少走路"],
+                path: ["入口广场", "九龙灌浴", "灵山大佛", "休憩区", "梵宫外景"],
+                notes: ["优先观看动态表演", "中途保留休息时间", "适合半日游或午后到访"]
+            },
+            {
+                id: "culture",
+                type: "culture",
+                badge: "深度体验",
+                title: "佛教文化深度线",
+                desc: "重点串联佛教艺术与建筑空间，适合对文化、展陈和建筑细节感兴趣的游客。",
+                score: 95,
+                distance: "4.8km",
+                duration: "约5小时",
+                intensity: "中等",
+                image: "images/banner-fangong.jpg",
+                tags: ["文化展陈", "建筑艺术", "深度讲解"],
+                path: ["灵山大佛", "梵宫", "五印坛城", "佛博馆", "曼飞龙塔"],
+                notes: ["建议配合语音讲解", "梵宫与佛博馆预留充足时间", "适合上午入园慢游"]
+            },
+            {
+                id: "photo",
+                type: "photo",
+                badge: "出片推荐",
+                title: "湖景摄影打卡线",
+                desc: "围绕开阔湖面、建筑倒影和标志景观取景，适合喜欢拍照留念的游客。",
+                score: 90,
+                distance: "3.0km",
+                duration: "约3小时",
+                intensity: "较低",
+                image: "images/banner-dafo.jpg",
+                tags: ["拍照打卡", "湖景视角", "外景为主"],
+                path: ["湖畔观景点", "灵山大佛远景", "梵宫外景", "五印坛城", "出口纪念区"],
+                notes: ["晴天上午光线更清透", "湖畔适合拍摄倒影", "外景路线更适合轻装游览"]
+            }
+        ];
+
+        const routesList = document.getElementById("routesList");
+        const detailPanel = document.getElementById("detailPanel");
+        const filterButtons = document.querySelectorAll(".filter-tabs button");
+        let activeRouteId = "classic";
+
+        function renderRoutes(filter = "all") {
+            const visibleRoutes = filter === "all" ? routes : routes.filter(route => route.type === filter);
+            routesList.innerHTML = visibleRoutes.map(route => `
+                <article class="route-card ${route.id === activeRouteId ? "active" : ""}" data-id="${route.id}">
+                    <div class="route-image" style="background-image: url('${route.image}')">
+                        <span class="route-badge">${route.badge}</span>
+                    </div>
+                    <div class="route-body">
+                        <div class="route-top">
+                            <div class="route-title">
+                                <h3>${route.title}</h3>
+                                <p>${route.desc}</p>
+                            </div>
+                            <div class="match-score">${route.score}<span>匹配度</span></div>
+                        </div>
+                        <div class="route-meta">
+                            <span>步行 ${route.distance}</span>
+                            <span>${route.duration}</span>
+                            <span>强度 ${route.intensity}</span>
+                        </div>
+                        <div class="route-path">
+                            ${route.path.map((name, index) => `
+                                <span class="dot"></span><span>${name}</span>${index < route.path.length - 1 ? '<span class="line"></span>' : ''}
+                            `).join("")}
+                        </div>
+                        <div class="route-tags">
+                            ${route.tags.map(tag => `<span>${tag}</span>`).join("")}
+                        </div>
+                    </div>
+                </article>
+            `).join("");
+
+            document.querySelectorAll(".route-card").forEach(card => {
+                card.addEventListener("click", () => {
+                    activeRouteId = card.dataset.id;
+                    renderRoutes(getCurrentFilter());
+                    renderDetail();
+                });
+            });
+
+            if (!visibleRoutes.some(route => route.id === activeRouteId) && visibleRoutes.length) {
+                activeRouteId = visibleRoutes[0].id;
+                renderRoutes(filter);
+                renderDetail();
+            }
+        }
+
+        function renderDetail() {
+            const route = routes.find(item => item.id === activeRouteId) || routes[0];
+            detailPanel.innerHTML = `
+                <div class="panel-hero" style="background-image: url('${route.image}')">
+                    <h3>${route.title}</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="panel-summary">
+                        <div class="summary-item"><strong>${route.distance}</strong><span>步行</span></div>
+                        <div class="summary-item"><strong>${route.duration.replace("约", "")}</strong><span>时长</span></div>
+                        <div class="summary-item"><strong>${route.intensity}</strong><span>强度</span></div>
+                    </div>
+                    <div class="timeline">
+                        ${route.path.map((name, index) => `
+                            <div class="timeline-item">
+                                <h4>${String(index + 1).padStart(2, "0")} · ${name}</h4>
+                                <p>${route.notes[index % route.notes.length]}</p>
+                            </div>
+                        `).join("")}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getCurrentFilter() {
+            const active = document.querySelector(".filter-tabs button.active");
+            return active ? active.dataset.filter : "all";
+        }
+
+        filterButtons.forEach(button => {
+            button.addEventListener("click", () => {
+                filterButtons.forEach(item => item.classList.remove("active"));
+                button.classList.add("active");
+                renderRoutes(button.dataset.filter);
+                renderDetail();
+            });
+        });
+
+        renderRoutes();
+        renderDetail();
+    </script>
+</body>
+</html>

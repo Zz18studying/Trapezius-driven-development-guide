@@ -27,13 +27,40 @@ class RAGService:
         try:
             if not os.path.exists(config.CHROMA_DB_PATH):
                 print(f"⚠️ 向量数据库不存在: {config.CHROMA_DB_PATH}")
-                return
+                print("   正在自动创建...")
+                os.makedirs(config.CHROMA_DB_PATH, exist_ok=True)
+            
             self.client = chromadb.PersistentClient(path=config.CHROMA_DB_PATH)
-            self.collection = self.client.get_collection(config.COLLECTION_NAME)
+            
+            try:
+                self.collection = self.client.get_collection(config.COLLECTION_NAME)
+            except Exception:
+                print(f"⚠️ 集合 {config.COLLECTION_NAME} 不存在，正在创建...")
+                LOCAL_MODEL_PATH = "/home/ubuntu/.cache/sentence-transformers/local_model"
+                if os.path.exists(LOCAL_MODEL_PATH):
+                    embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                        model_name=LOCAL_MODEL_PATH
+                    )
+                    self.collection = self.client.create_collection(
+                        name=config.COLLECTION_NAME,
+                        embedding_function=embedding_fn
+                    )
+                else:
+                    self.collection = self.client.create_collection(
+                        name=config.COLLECTION_NAME
+                    )
+            
             print(f"✅ RAG服务初始化成功")
             print(f"   数据库: {config.CHROMA_DB_PATH}")
             print(f"   集合: {config.COLLECTION_NAME}")
             print(f"   条目数: {self.collection.count()}")
+            
+            if self.collection.count() == 0:
+                print("⚠️ 数据库为空，请运行以下脚本填充数据:")
+                print("   1. python scripts/01_extract_and_merge_data.py")
+                print("   2. python scripts/02_generate_faq.py")
+                print("   3. python scripts/03_build_vector_db.py")
+                
         except Exception as e:
             print(f"❌ RAG服务初始化失败: {e}")
 

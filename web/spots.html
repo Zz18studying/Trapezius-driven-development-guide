@@ -629,6 +629,7 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="theme.css">
 </head>
 <body>
 
@@ -665,11 +666,11 @@
 
         <div class="page-header">
             <div class="title">
-                📍 景点列表
+                景点列表
                 <small>· 悬停预览 · 点击探索</small>
             </div>
             <div class="search-box">
-                <input type="text" placeholder="🔍 搜索景点..." id="searchInput" onkeyup="filterSpots()">
+                <input type="text" placeholder="搜索景点..." id="searchInput" onkeyup="filterSpots()">
             </div>
         </div>
 
@@ -677,7 +678,7 @@
             <!-- 由 JS 动态渲染 -->
         </div>
 
-        <div class="bottom-hint" id="bottomHint">✦ 悬停卡片立体浮现 · 点击展开详情 ✦</div>
+        <div class="bottom-hint" id="bottomHint">悬停卡片立体浮现 · 点击展开详情</div>
 
     </main>
 
@@ -685,7 +686,7 @@
     <div class="overlay" id="overlay" onclick="closeExpanded()"></div>
 
     <!-- ===== 关闭按钮 ===== -->
-    <button class="close-btn" id="closeBtn" onclick="closeExpanded()">✕</button>
+    <button class="close-btn" id="closeBtn" onclick="closeExpanded()">关闭</button>
 
     <script>
         // ============================================================
@@ -694,7 +695,7 @@
         const spotsData = [{
             id: 1,
             name: '灵山大佛',
-            icon: '🏛️',
+            icon: 'NO.1',
             rating: 4.9,
             tags: ['必打卡', '祈福', '世界之最'],
             desc: '88米高青铜大佛，庄严肃穆，是世界上最高的青铜佛像之一。',
@@ -705,7 +706,7 @@
         }, {
             id: 2,
             name: '九龙灌浴',
-            icon: '⛲',
+            icon: 'SHOW',
             rating: 4.8,
             tags: ['定时演出', '必打卡', '震撼'],
             desc: '大型音乐动态群雕，讲述佛教经典故事，每日定时演出。',
@@ -716,7 +717,7 @@
         }, {
             id: 3,
             name: '梵宫',
-            icon: '🏯',
+            icon: 'ART',
             rating: 4.7,
             tags: ['文化瑰宝', '佛教艺术', '金碧辉煌'],
             desc: '佛教艺术殿堂，金碧辉煌，汇集了众多佛教艺术珍品。',
@@ -727,7 +728,7 @@
         }, {
             id: 4,
             name: '五印坛城',
-            icon: '🏠',
+            icon: 'TIBET',
             rating: 4.6,
             tags: ['藏传佛教', '拍照', '神秘'],
             desc: '藏传佛教风格建筑，神秘庄严，展示了藏传佛教的独特魅力。',
@@ -738,7 +739,7 @@
         }, {
             id: 5,
             name: '曼飞龙塔',
-            icon: '🗼',
+            icon: 'TOWER',
             rating: 4.5,
             tags: ['南传佛教', '异域风情', '拍照'],
             desc: '南传佛教风格佛塔，造型独特，充满异域风情。',
@@ -749,7 +750,7 @@
         }, {
             id: 6,
             name: '佛博馆',
-            icon: '📚',
+            icon: 'MUSEUM',
             rating: 4.4,
             tags: ['佛教文化', '历史', '文物'],
             desc: '佛教文化博物馆，收藏了众多佛教文物和历史珍品。',
@@ -778,7 +779,7 @@
                                 <div class="card-header">
                                     <span class="icon">${spot.icon}</span>
                                     <span class="name">${spot.name}</span>
-                                    <span class="rating">⭐ ${spot.rating}</span>
+                                    <span class="rating">评分 ${spot.rating}</span>
                                 </div>
                                 <div class="card-tags">
                                     ${spot.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
@@ -787,19 +788,19 @@
                             </div>
                             <div>
                                 <div class="card-meta">
-                                    <span>⏱️ ${spot.time}</span>
-                                    <span>👥 ${spot.visitors}</span>
+                                    <span>时长 ${spot.time}</span>
+                                    <span>热度 ${spot.visitors}</span>
                                 </div>
-                                <div class="card-hint">📖 点击查看详情 →</div>
+                                <div class="card-hint">点击查看详情</div>
                                 <div class="card-actions">
-                                    <button class="btn btn-primary" onclick="event.stopPropagation(); location.href='spot-detail.html?id=${spot.id}'">📖 查看详情</button>
-                                    <button class="btn btn-gold" onclick="event.stopPropagation(); alert('🎧 正在播放语音讲解：${spot.name}...')">▶ 语音讲解</button>
-                                    <button class="btn btn-outline" onclick="event.stopPropagation(); location.href='chat.html'">💬 问小灵</button>
+                                    <button class="btn btn-primary" onclick="event.stopPropagation(); location.href='spot-detail.html?id=${spot.id}'">查看详情</button>
+                                    <button class="btn btn-gold" onclick="event.stopPropagation(); alert('正在播放语音讲解：${spot.name}...')">语音讲解</button>
+                                    <button class="btn btn-outline" onclick="event.stopPropagation(); location.href='chat.html'">问小灵</button>
                                 </div>
                             </div>
                         </div>
                     `;
-                // 🔥 点击卡片 → 直接跳转详情页
+                // 点击卡片，直接跳转详情页
                 card.addEventListener('click', function(e) {
                     if (e.target.closest('.btn')) return;
                     location.href = `spot-detail.html?id=${spot.id}`;
@@ -878,7 +879,7 @@
         // 初始化
         // ============================================================
         renderSpots(spotsData);
-        console.log('📍 立体悬浮景点列表加载成功');
+        console.log('立体悬浮景点列表加载成功');
     </script>
 
 </body>

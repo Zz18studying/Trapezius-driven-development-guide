@@ -211,7 +211,6 @@
             font-size: 14px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
             border: 1px solid rgba(200, 220, 235, 0.3);
-            position: relative;
         }
         .message.user .message-content {
             background: linear-gradient(135deg, #5ba3c7, #4a90b0);
@@ -221,35 +220,15 @@
         .message-time { font-size: 10px; color: #a0b8c8; margin-top: 4px; }
         .message.user .message-time { color: rgba(255, 255, 255, 0.7); }
 
-        .cursor-blink {
-            display: inline-block;
-            width: 2px;
-            height: 1em;
-            background: #4a6741;
-            animation: blink 0.8s infinite;
-            margin-left: 2px;
-            vertical-align: text-bottom;
-        }
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-
         .typing-dots span {
             animation: blink 1.4s infinite;
             display: inline-block;
         }
         .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
         .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-        .source-tag {
-            display: inline-block;
-            font-size: 11px;
-            background: #e8f5e9;
-            color: #4a6741;
-            padding: 2px 10px;
-            border-radius: 12px;
-            margin-top: 6px;
+        @keyframes blink {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
         }
 
         .input-area {
@@ -422,6 +401,7 @@
             .digital-panel { height: 220px; }
         }
     </style>
+    <link rel="stylesheet" href="theme.css">
     <script src="lib/pixi.min.js"></script>
     <script src="lib/live2dcubismcore.min.js"></script>
     <script src="lib/cubism4.min.js"></script>
@@ -461,12 +441,12 @@
 
         <div class="chat-header">
             <div class="title">
-                🎭 AI导游
+                AI导游
                 <small>· 小灵</small>
             </div>
             <div class="header-right">
-                <span class="session-id" id="sessionDisplay" title="点击复制">📋 未初始化</span>
-                <button class="clear-btn" id="clearSessionBtn">🗑️ 清空</button>
+                <span class="session-id" id="sessionDisplay" title="点击复制">未初始化</span>
+                <button class="clear-btn" id="clearSessionBtn">清空会话</button>
             </div>
         </div>
 
@@ -485,17 +465,17 @@
                     </div>
                 </div>
                 <div class="input-area">
-                    <button class="voice-btn" id="voiceBtn" title="按住说话">🎤</button>
-                    <input type="text" id="messageInput" placeholder="输入问题或按住🎤说话..." autocomplete="off">
+                    <button class="voice-btn" id="voiceBtn" title="按住说话">语音</button>
+                    <input type="text" id="messageInput" placeholder="输入问题，或按住语音按钮提问..." autocomplete="off">
                     <button class="send-btn" id="sendBtn">发送</button>
                 </div>
             </div>
 
             <div class="digital-panel">
-                <div class="dh-header">🎭 小灵 · AI导游</div>
+                <div class="dh-header">小灵 · AI导游</div>
                 <div class="dh-canvas-wrapper" id="dhContainer">
                     <canvas id="live2dCanvas"></canvas>
-                    <div class="dh-status" id="dhStatus">⏳ 加载中...</div>
+                    <div class="dh-status" id="dhStatus">加载中...</div>
                 </div>
             </div>
 
@@ -503,7 +483,7 @@
     </div>
 
     <div class="recording-tip" id="recordingTip">
-        <span style="display:inline-block;animation:pulse 0.5s infinite alternate;">🎙️</span> 正在录音...
+        <span style="display:inline-block;animation:pulse 0.5s infinite alternate;">REC</span> 正在录音...
     </div>
 
     <script>
@@ -516,12 +496,10 @@
                 const data = await response.json();
                 if (data.code === 0) {
                     return data.data.session_id;
-                } else {
-                    throw new Error(data.msg || '分配会话ID失败');
                 }
+                throw new Error(data.msg || '分配会话ID失败');
             } catch (err) {
                 console.error('获取会话ID失败:', err);
-                // 降级方案：本地生成（保证可用性）
                 const now = new Date();
                 const dateStr = now.getFullYear() +
                     String(now.getMonth() + 1).padStart(2, '0') +
@@ -531,16 +509,11 @@
             }
         }
 
-        // ============================================================
-        // 1. 会话管理（续）
-        // ============================================================
         let sessionId = localStorage.getItem('sessionId');
-        // 页面加载时只读取 localStorage，不主动生成
-        // 如果 localStorage 有值，直接使用；否则设为 null，等发送消息时再获取
         if (sessionId) {
-            document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
+            document.getElementById('sessionDisplay').textContent = sessionId;
         } else {
-            document.getElementById('sessionDisplay').textContent = '📋 未初始化';
+            document.getElementById('sessionDisplay').textContent = '未初始化';
         }
 
         // ============================================================
@@ -560,8 +533,46 @@
         let recordTimer = null;
 
         // ============================================================
-        // 3. 辅助函数
+        // 3. 对话辅助函数
         // ============================================================
+        function addMessage(content, role) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+
+            let avatarHTML = '';
+            if (role === 'assistant') {
+                avatarHTML = `
+                    <div class="message-avatar">
+                        <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
+                    </div>
+                `;
+            } else {
+                avatarHTML = `
+                    <div class="message-avatar">
+                        <svg viewBox="0 0 100 100" width="36" height="36">
+                            <circle cx="50" cy="35" r="20" fill="#fff" opacity="0.8"/>
+                            <circle cx="42" cy="32" rx="3" ry="4" fill="#6bb5d9"/>
+                            <circle cx="58" cy="32" rx="3" ry="4" fill="#6bb5d9"/>
+                            <circle cx="50" cy="42" r="6" fill="#e8a0a0" opacity="0.5"/>
+                            <path d="M38 55 Q50 65 62 55" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                `;
+            }
+
+            const time = new Date().toLocaleTimeString();
+            div.innerHTML = `
+                ${avatarHTML}
+                <div class="message-content">
+                    ${escapeHtml(content)}
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+            chatMessages.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return div;
+        }
+
         function escapeHtml(text) {
             const d = document.createElement('div');
             d.textContent = text;
@@ -577,7 +588,7 @@
         }
 
         // ============================================================
-        // 4. 核心：流式发送消息
+        // 4. 流式发送消息
         // ============================================================
         async function sendMessage(question) {
             if (!question) {
@@ -585,24 +596,21 @@
             }
             if (!question || isWaiting) return;
 
-            // ---- 如果没有 session_id，先从后端获取 ----
             if (!sessionId) {
                 sessionId = await initSessionFromServer();
                 localStorage.setItem('sessionId', sessionId);
-                document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
+                document.getElementById('sessionDisplay').textContent = sessionId;
             }
 
-            // 清空输入
             messageInput.value = '';
             isWaiting = true;
             sendBtn.disabled = true;
             voiceBtn.disabled = true;
 
-            // 添加用户消息
             const userDiv = document.createElement('div');
             userDiv.className = 'message user';
             userDiv.innerHTML = `
-                <div class="message-avatar">🧑</div>
+                <div class="message-avatar">我</div>
                 <div class="message-content">
                     ${escapeHtml(question)}
                     <div class="message-time">${getTimeString()}</div>
@@ -611,7 +619,6 @@
             chatMessages.appendChild(userDiv);
             scrollToBottom();
 
-            // 创建 assistant 消息占位（用于流式填充）
             const assistantDiv = document.createElement('div');
             assistantDiv.className = 'message assistant';
             assistantDiv.id = 'streaming-message';
@@ -660,73 +667,66 @@
                     buffer = lines.pop() || '';
 
                     for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const jsonStr = line.slice(6).trim();
-                            if (!jsonStr) continue;
-                            try {
-                                const data = JSON.parse(jsonStr);
-                                if (data.type === 'token') {
-                                    fullAnswer += data.content;
-                                    streamingText.textContent = fullAnswer;
-                                    scrollToBottom();
-                                } else if (data.type === 'done') {
-                                    // 移除光标
-                                    const cursor = assistantDiv.querySelector('.cursor-blink');
-                                    if (cursor) cursor.remove();
-                                    streamingText.textContent = data.content || fullAnswer;
-                                    // 添加来源标签（如果有）
-                                    if (data.sources && data.sources.length > 0) {
-                                        const tag = document.createElement('div');
-                                        tag.className = 'source-tag';
-                                        tag.textContent = `📚 来源: ${data.sources.length} 条知识库匹配`;
-                                        assistantDiv.querySelector('.message-content').appendChild(tag);
-                                    }
-                                    // 更新消息时间
-                                    const timeEl = assistantDiv.querySelector('.message-time');
-                                    if (timeEl) timeEl.textContent = getTimeString();
-                                    // 调用数字人说话
-                                    if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
-                                        await window.digitalHuman.speak(data.content || fullAnswer);
-                                    }
-                                    // 清理状态
-                                    isWaiting = false;
-                                    sendBtn.disabled = false;
-                                    voiceBtn.disabled = false;
-                                    messageInput.focus();
-                                    // 移除 id
-                                    assistantDiv.id = '';
-                                    return;
-                                } else if (data.type === 'error') {
-                                    throw new Error(data.content || '未知错误');
+                        if (!line.startsWith('data: ')) continue;
+                        const jsonStr = line.slice(6).trim();
+                        if (!jsonStr) continue;
+
+                        try {
+                            const data = JSON.parse(jsonStr);
+                            if (data.type === 'token') {
+                                fullAnswer += data.content;
+                                streamingText.textContent = fullAnswer;
+                                scrollToBottom();
+                            } else if (data.type === 'done') {
+                                const cursor = assistantDiv.querySelector('.cursor-blink');
+                                if (cursor) cursor.remove();
+                                streamingText.textContent = data.content || fullAnswer;
+
+                                if (data.sources && data.sources.length > 0) {
+                                    const tag = document.createElement('div');
+                                    tag.className = 'source-tag';
+                                    tag.textContent = `来源：${data.sources.length} 条知识库匹配`;
+                                    assistantDiv.querySelector('.message-content').appendChild(tag);
                                 }
-                            } catch (e) {
-                                console.warn('解析 SSE 数据失败:', line, e);
+
+                                const timeEl = assistantDiv.querySelector('.message-time');
+                                if (timeEl) timeEl.textContent = getTimeString();
+
+                                if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
+                                    window.digitalHuman.speak(data.content || fullAnswer)
+                                        .catch(err => console.warn('数字人语音播放失败:', err));
+                                }
+
+                                assistantDiv.id = '';
+                                return;
+                            } else if (data.type === 'error') {
+                                throw new Error(data.content || '未知错误');
                             }
+                        } catch (e) {
+                            console.warn('解析 SSE 数据失败:', line, e);
                         }
                     }
                 }
 
-                // 如果循环结束但没收到 done（异常情况）
                 throw new Error('流式响应意外结束');
-
             } catch (err) {
                 console.error('流式请求失败:', err);
-                const errorMsg = err.message || '网络连接失败，请检查后端服务';
-                streamingText.textContent = '⚠️ ' + errorMsg;
+                streamingText.textContent = '提示：' + (err.message || '网络连接失败，请检查后端服务');
                 const cursor = assistantDiv.querySelector('.cursor-blink');
                 if (cursor) cursor.remove();
                 assistantDiv.id = '';
+                const timeEl = assistantDiv.querySelector('.message-time');
+                if (timeEl) timeEl.textContent = getTimeString();
+            } finally {
                 isWaiting = false;
                 sendBtn.disabled = false;
                 voiceBtn.disabled = false;
-                // 显示错误提示
-                const timeEl = assistantDiv.querySelector('.message-time');
-                if (timeEl) timeEl.textContent = getTimeString();
+                messageInput.focus();
             }
         }
 
         // ============================================================
-        // 5. 语音输入（保持不变）
+        // 5. 语音输入
         // ============================================================
         async function startRecording() {
             if (isRecording || isWaiting) return;
@@ -777,133 +777,18 @@
                 if (data.success && data.text) {
                     await sendMessage(data.text);
                 } else {
-                    // 添加错误提示
-                    const errDiv = document.createElement('div');
-                    errDiv.className = 'message assistant';
-                    errDiv.innerHTML = `
-                        <div class="message-avatar">
-                            <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                        </div>
-                        <div class="message-content">
-                            语音识别失败，请重试
-                            <div class="message-time">${getTimeString()}</div>
-                        </div>
-                    `;
-                    chatMessages.appendChild(errDiv);
+                    addMessage('语音识别失败，请重试', 'assistant');
                     scrollToBottom();
                 }
             } catch (err) {
                 console.error('识别失败:', err);
-                const errDiv = document.createElement('div');
-                errDiv.className = 'message assistant';
-                errDiv.innerHTML = `
-                    <div class="message-avatar">
-                        <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                    </div>
-                    <div class="message-content">
-                        语音识别服务异常
-                        <div class="message-time">${getTimeString()}</div>
-                    </div>
-                `;
-                chatMessages.appendChild(errDiv);
+                addMessage('语音识别服务异常', 'assistant');
                 scrollToBottom();
             }
         }
 
         // ============================================================
-        // 6. 清空会话
-        // ============================================================
-        document.getElementById('clearSessionBtn').addEventListener('click', async function() {
-            if (confirm('确定要清空对话记忆吗？')) {
-                try {
-                    if (sessionId) {
-                        await fetch(`/api/chat/clear?session_id=${sessionId}`, { method: 'POST' });
-                    }
-                    // 从后端获取新的 session_id
-                    sessionId = await initSessionFromServer();
-                    localStorage.setItem('sessionId', sessionId);
-                    document.getElementById('sessionDisplay').textContent = '📋 ' + sessionId;
-                    chatMessages.innerHTML = '';
-                    // 重新添加欢迎消息
-                    const welcome = document.createElement('div');
-                    welcome.className = 'message assistant';
-                    welcome.innerHTML = `
-                        <div class="message-avatar">
-                            <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                        </div>
-                        <div class="message-content">
-                            您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？
-                            <div class="message-time">刚刚</div>
-                        </div>
-                    `;
-                    chatMessages.appendChild(welcome);
-                    // 添加清空提示
-                    const clearMsg = document.createElement('div');
-                    clearMsg.className = 'message assistant';
-                    clearMsg.innerHTML = `
-                        <div class="message-avatar">
-                            <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
-                        </div>
-                        <div class="message-content">
-                            🔄 对话已清空，新会话ID: ${sessionId}
-                            <div class="message-time">${getTimeString()}</div>
-                        </div>
-                    `;
-                    chatMessages.appendChild(clearMsg);
-                    scrollToBottom();
-                } catch (err) {
-                    console.error('清空失败:', err);
-                    alert('清空失败，请重试');
-                }
-            }
-        });
-
-        document.getElementById('sessionDisplay').addEventListener('click', function() {
-            if (!sessionId) {
-                alert('会话ID尚未初始化，请先发送一条消息');
-                return;
-            }
-            navigator.clipboard.writeText(sessionId).then(() => {
-                alert('会话ID已复制: ' + sessionId);
-            }).catch(() => {
-                const input = document.createElement('input');
-                input.value = sessionId;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                document.body.removeChild(input);
-                alert('会话ID已复制: ' + sessionId);
-            });
-        });
-
-        // ============================================================
-        // 7. 事件绑定
-        // ============================================================
-        sendBtn.onclick = () => {
-            const text = messageInput.value.trim();
-            if (text) sendMessage(text);
-        };
-        messageInput.onkeypress = (e) => {
-            if (e.key === 'Enter') {
-                const text = messageInput.value.trim();
-                if (text) sendMessage(text);
-            }
-        };
-        voiceBtn.addEventListener('mousedown', startRecording);
-        voiceBtn.addEventListener('mouseup', stopRecording);
-        voiceBtn.addEventListener('mouseleave', stopRecording);
-        voiceBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            startRecording();
-        });
-        voiceBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            stopRecording();
-        });
-        voiceBtn.addEventListener('touchcancel', stopRecording);
-
-        // ============================================================
-        // 8. 数字人（保持不变）
+        // 6. 数字人控制模块
         // ============================================================
         const DigitalHuman = {
             app: null,
@@ -952,8 +837,8 @@
                     this._resetAllParameters();
 
                     this.isReady = true;
-                    dhStatus.textContent = '✅ 已就绪';
-                    console.log('✅ Hiyori Pro 加载成功');
+                    dhStatus.textContent = '已就绪';
+                    console.log('Hiyori Pro 加载成功');
 
                     this._startIdle();
 
@@ -961,7 +846,7 @@
 
                 } catch (err) {
                     console.error('数字人加载失败:', err);
-                    dhStatus.textContent = '❌ 加载失败: ' + err.message;
+                    dhStatus.textContent = '加载失败: ' + err.message;
                 }
             },
 
@@ -992,7 +877,7 @@
                         internal.motionManager.startRandomMotion = function() {
                             return Promise.resolve(null);
                         };
-                        console.log('✅ motionManager 已彻底禁用');
+                        console.log('motionManager 已彻底禁用');
                     }
                 } catch(e) {
                     console.log('禁用动作失败:', e);
@@ -1008,11 +893,11 @@
                         const name = paramIds[i].getId ? paramIds[i].getId() : paramIds[i];
                         if (name === 'ParamMouthOpenY') {
                             this._mouthParamIndex = i;
-                            console.log(`✅ 缓存 ParamMouthOpenY 索引: ${i}`);
+                            console.log(`缓存 ParamMouthOpenY 索引: ${i}`);
                         }
                         if (name === 'ParamMouthForm') {
                             this._formParamIndex = i;
-                            console.log(`✅ 缓存 ParamMouthForm 索引: ${i}`);
+                            console.log(`缓存 ParamMouthForm 索引: ${i}`);
                         }
                     }
                 } catch(e) {
@@ -1028,7 +913,7 @@
                         coreModel._parameterValues[i] = 0;
                     }
                     coreModel.update();
-                    console.log('✅ 所有参数已重置');
+                    console.log('所有参数已重置');
                 } catch(e) {
                     console.log('重置参数失败:', e);
                 }
@@ -1103,7 +988,7 @@
                     this._idleTimer = setTimeout(doIdleAction, delay);
                 };
                 setTimeout(doIdleAction, 2000);
-                console.log('✅ 待机表情已启动');
+                console.log('待机表情已启动');
             },
 
             _stopIdle() {
@@ -1138,7 +1023,7 @@
                 this.isSpeaking = true;
                 this._isIdle = false;
                 this._stopIdle();
-                dhStatus.textContent = '🔊 合成语音...';
+                dhStatus.textContent = '合成语音...';
 
                 try {
                     const res = await fetch(`/api/voice/tts`, {
@@ -1149,7 +1034,7 @@
                     const data = await res.json();
 
                     if (!data.success || !data.audio_url) {
-                        dhStatus.textContent = '❌ 合成失败';
+                        dhStatus.textContent = '合成失败';
                         this.isSpeaking = false;
                         this._startIdle();
                         return;
@@ -1202,7 +1087,7 @@
                     };
 
                     audio.onplay = () => {
-                        dhStatus.textContent = '🎤 说话中...';
+                        dhStatus.textContent = '说话中...';
                         isActive = true;
                         updateMouth();
                     };
@@ -1222,7 +1107,7 @@
 
                 } catch (err) {
                     console.error('说话失败:', err);
-                    dhStatus.textContent = '❌ 说话失败';
+                    dhStatus.textContent = '说话失败';
                     this._finishSpeaking();
                 }
             },
@@ -1259,11 +1144,78 @@
                 this._currentAudio = null;
                 this.isSpeaking = false;
                 this._mouthSmooth = 0;
-                dhStatus.textContent = '✅ 已就绪';
+                dhStatus.textContent = '已就绪';
                 this._disableAllMotions();
                 this._startIdle();
             }
         };
+
+        // ============================================================
+        // 7. 清空会话
+        // ============================================================
+        document.getElementById('clearSessionBtn').addEventListener('click', async function() {
+            if (confirm('确定要清空对话记忆吗？')) {
+                try {
+                    if (sessionId) {
+                        await fetch(`/api/chat/clear?session_id=${sessionId}`, { method: 'POST' });
+                    }
+                    sessionId = await initSessionFromServer();
+                    localStorage.setItem('sessionId', sessionId);
+                    document.getElementById('sessionDisplay').textContent = sessionId;
+                    chatMessages.innerHTML = '';
+                    addMessage('您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？', 'assistant');
+                    addMessage('对话已清空，新会话ID: ' + sessionId, 'assistant');
+                    scrollToBottom();
+                } catch (err) {
+                    console.error('清空失败:', err);
+                    alert('清空失败，请重试');
+                }
+            }
+        });
+
+        document.getElementById('sessionDisplay').addEventListener('click', function() {
+            if (!sessionId) {
+                alert('会话ID尚未初始化，请先发送一条消息');
+                return;
+            }
+            navigator.clipboard.writeText(sessionId).then(() => {
+                alert('会话ID已复制: ' + sessionId);
+            }).catch(() => {
+                const input = document.createElement('input');
+                input.value = sessionId;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                alert('会话ID已复制: ' + sessionId);
+            });
+        });
+
+        // ============================================================
+        // 8. 事件绑定
+        // ============================================================
+        sendBtn.onclick = () => {
+            const text = messageInput.value.trim();
+            if (text) sendMessage(text);
+        };
+        messageInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const text = messageInput.value.trim();
+                if (text) sendMessage(text);
+            }
+        };
+        voiceBtn.addEventListener('mousedown', startRecording);
+        voiceBtn.addEventListener('mouseup', stopRecording);
+        voiceBtn.addEventListener('mouseleave', stopRecording);
+        voiceBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startRecording();
+        });
+        voiceBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopRecording();
+        });
+        voiceBtn.addEventListener('touchcancel', stopRecording);
 
         // ============================================================
         // 9. 启动
@@ -1272,9 +1224,9 @@
         DigitalHuman.init();
         messageInput.focus();
 
-        console.log('🎭 AI导游页面（流式版）已加载');
-        console.log('📡 流式API: /api/chat/ask/stream');
-        console.log(`📋 会话ID: ${sessionId || '未初始化'}`);
+        console.log('AI导游页面已加载');
+        console.log('流式API: /api/chat/ask/stream');
+        console.log(`会话ID: ${sessionId || '未初始化'}`);
     </script>
 
 </body>
