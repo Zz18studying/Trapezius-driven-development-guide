@@ -272,28 +272,38 @@ def health():
 
 
 @router.get("/session/init")
-def init_session():
+async def init_session():
     """
-    分配一个新的 session_id
+    分配一个新的 session_id，保证全局唯一且连续递增
+    格式：lingshan_YYYYMMDD_XXXXXX（6位序号）
     """
-    from models.database import SessionLocal, Conversation
+    from models.database import SessionLocal
     from datetime import datetime
-    
+    from sqlalchemy import text
+
     db = SessionLocal()
     try:
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        count = db.query(Conversation.session_id).filter(
-            Conversation.created_at >= today_start,
-            Conversation.created_at <= today_end,
-            Conversation.session_id.isnot(None),
-            Conversation.session_id != ""
-        ).distinct().count()
-        
-        seq = str(count + 1).zfill(6)
-        session_id = f"lingshan_{datetime.now().strftime('%Y%m%d')}_{seq}"
-        
+        today = datetime.now().strftime("%Y%m%d")
+        # 使用事务和行锁保证原子性
+        # 先尝试插入今日记录，如果已存在则忽略
+        db.execute(text("INSERT OR IGNORE INTO session_counter (date, counter) VALUES (:date, 0)"), {"date": today})
+        # 递增计数器并返回新值
+        result = db.execute(
+            text("UPDATE session_counter SET counter = counter + 1 WHERE date = :date RETURNING counter"),
+            {"date": today}
+        ).fetchone()
+        # 如果 SQLite 不支持 RETURNING，改用 SELECT 方式
+        if result is None:
+            # 部分 SQLite 版本不支持 RETURNING，手动查询
+            db.execute(text("UPDATE session_counter SET counter = counter + 1 WHERE date = :date"), {"date": today})
+            result = db.execute(text("SELECT counter FROM session_counter WHERE date = :date"), {"date": today}).fetchone()
+        db.commit()
+        seq = str(result[0]).zfill(6)
+        session_id = f"lingshan_{today}_{seq}"
         return {"code": 0, "data": {"session_id": session_id}, "msg": "success"}
+    except Exception as e:
+        db.rollback()
+        print(f"[session/init] 错误: {e}")
+        return {"code": 1, "msg": str(e), "data": None}
     finally:
         db.close()

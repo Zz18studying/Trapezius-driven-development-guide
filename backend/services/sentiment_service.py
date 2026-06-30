@@ -78,7 +78,7 @@ def analyze_sentiment_llm(text: str) -> str:
     except Exception as e:
         print(f"[情感分析] LLM 调用异常: {e}")
         # 降级到静态
-        return analyze_sentiment_static(text)
+    return analyze_sentiment_static(text)
 
 
 def analyze_sentiment(text: str, use_llm: bool = True) -> str:
@@ -169,39 +169,64 @@ def get_session_sentiment_trajectory(session_id: str) -> Dict[str, Any]:
             Conversation.session_id == session_id,
             Conversation.sentiment.isnot(None)
         ).order_by(Conversation.created_at).all()
-        if len(convs) < 2:
+        if len(convs) < 3:
             return {
                 "session_id": session_id,
                 "total_turns": len(convs),
                 "start_sentiment": convs[0].sentiment if convs else None,
                 "end_sentiment": convs[-1].sentiment if convs else None,
                 "direction": "insufficient_data",
-                "trajectory": [c.sentiment for c in convs]
+                "trajectory": [c.sentiment for c in convs],
+                "risk_score": 0,
+                "risk_level": "low",
+                "negative_density": 0,
+                "diff_score": 0
             }
-        start = convs[0].sentiment
-        end = convs[-1].sentiment
         score_map = {"positive": 1, "neutral": 0, "negative": -1}
-        start_score = score_map.get(start, 0)
-        end_score = score_map.get(end, 0)
+        start_score = score_map.get(convs[0].sentiment, 0)
+        end_score = score_map.get(convs[-1].sentiment, 0)
+        diff_score = start_score - end_score
+        diff_norm = (diff_score + 2) / 4 * 100
+        diff_weighted = max(0, min(100, diff_norm)) * 0.4
+
+        window_size = max(3, int(len(convs) * 0.3))
+        last_n = convs[-window_size:]
+        negative_count = sum(1 for c in last_n if c.sentiment == "negative")
+        density = negative_count / len(last_n)
+        density_weighted = density * 100 * 0.6
+
+        risk_score = diff_weighted + density_weighted
+        if risk_score >= 60:
+            risk_level = "high"
+        elif risk_score >= 30:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
         if end_score > start_score:
             direction = "improving"
         elif end_score < start_score:
             direction = "declining"
         else:
             direction = "stable"
+
         return {
             "session_id": session_id,
             "total_turns": len(convs),
-            "start_sentiment": start,
-            "end_sentiment": end,
+            "start_sentiment": convs[0].sentiment,
+            "end_sentiment": convs[-1].sentiment,
             "direction": direction,
-            "trajectory": [c.sentiment for c in convs]
+            "trajectory": [c.sentiment for c in convs],
+            "risk_score": round(risk_score, 1),
+            "risk_level": risk_level,
+            "negative_density": round(density * 100, 1),
+            "diff_score": round(diff_score, 2)
         }
     finally:
         db.close()
 
 
-def get_high_risk_sessions(days: int = 7, threshold: int = 2) -> List[Dict[str, Any]]:
+def get_high_risk_sessions(days: int = 7, threshold: str = "high") -> List[Dict[str, Any]]:
     db = SessionLocal()
     try:
         cutoff = datetime.now() - timedelta(days=days)
@@ -210,21 +235,30 @@ def get_high_risk_sessions(days: int = 7, threshold: int = 2) -> List[Dict[str, 
             Conversation.session_id.isnot(None),
             Conversation.session_id != "unknown"
         ).distinct().all()
+        risk_levels = ["high", "medium", "low"]
+        if threshold not in risk_levels:
+            threshold = "high"
+        level_index = risk_levels.index(threshold)
         high_risk = []
         for (session_id,) in sessions:
             traj = get_session_sentiment_trajectory(session_id)
-            if traj["direction"] == "declining":
-                neg_count = traj["trajectory"].count("negative") if traj["trajectory"] else 0
-                if neg_count >= threshold:
-                    high_risk.append({
-                        "session_id": session_id,
-                        "total_turns": traj["total_turns"],
-                        "negative_count": neg_count,
-                        "start_sentiment": traj["start_sentiment"],
-                        "end_sentiment": traj["end_sentiment"],
-                        "trajectory": traj["trajectory"]
-                    })
-        high_risk.sort(key=lambda x: x["negative_count"], reverse=True)
+            if traj["direction"] == "insufficient_data":
+                continue
+            current_level_index = risk_levels.index(traj["risk_level"])
+            if current_level_index <= level_index:
+                high_risk.append({
+                    "session_id": session_id,
+                    "total_turns": traj["total_turns"],
+                    "start_sentiment": traj["start_sentiment"],
+                    "end_sentiment": traj["end_sentiment"],
+                    "direction": traj["direction"],
+                    "trajectory": traj["trajectory"],
+                    "risk_score": traj["risk_score"],
+                    "risk_level": traj["risk_level"],
+                    "negative_density": traj["negative_density"],
+                    "diff_score": traj["diff_score"]
+                })
+        high_risk.sort(key=lambda x: x["risk_score"], reverse=True)
         return high_risk
     finally:
         db.close()
@@ -256,7 +290,6 @@ def generate_suggestions(overview: Dict[str, Any], trend: List[Dict]) -> List[Di
     positive_rate = overview.get("positive_rate", 0)
     total = overview.get("total_conversations", 0)
     avg_response = overview.get("avg_response_time", 0)
-
     if total > 0:
         if negative_rate > 30:
             suggestions.append({
@@ -279,7 +312,6 @@ def generate_suggestions(overview: Dict[str, Any], trend: List[Dict]) -> List[Di
                 "description": f"近7天正面反馈占比 {positive_rate}%，负面反馈仅 {negative_rate}%。",
                 "action": "继续保持，可适当增加主动推荐"
             })
-
     if total < 10:
         suggestions.append({
             "level": "low",
@@ -287,7 +319,6 @@ def generate_suggestions(overview: Dict[str, Any], trend: List[Dict]) -> List[Di
             "description": f"近7天仅有 {total} 条对话，统计结果可能不够代表性。",
             "action": "增加测试数据或推广数字人使用"
         })
-
     if avg_response > 3.0:
         suggestions.append({
             "level": "medium",
@@ -302,15 +333,13 @@ def generate_suggestions(overview: Dict[str, Any], trend: List[Dict]) -> List[Di
             "description": f"平均响应时间 {avg_response} 秒，尚有优化空间。",
             "action": "考虑增加缓存或使用更轻量模型"
         })
-
     return suggestions
 
 
 def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
     overview = get_sentiment_overview(days)
     trend = get_sentiment_trend(days)
-    high_risk = get_high_risk_sessions(days, threshold=2)
-
+    high_risk = get_high_risk_sessions(days, threshold="high")
     table_desc = f"""
 【数据库表说明】
 - 表名：conversations（对话记录）
@@ -333,7 +362,6 @@ def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
 【高风险会话（情绪持续下降）】
 {json.dumps(high_risk, ensure_ascii=False, indent=2) if high_risk else '暂无'}
 """
-
     prompt = f"""
 你是一位资深的景区运营管理专家。请基于以下数据，生成一份面向管理层的《游客感受度分析报告》。
 
@@ -347,7 +375,6 @@ def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
 
 报告要专业、简洁、有洞察力。
 """
-
     report_text = ""
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -376,7 +403,6 @@ def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
         except Exception as e:
             print(f"[高级报告] LLM调用异常: {e}")
             report_text = "（报告生成服务暂时不可用）"
-
     return {
         "raw_data": {
             "overview": overview,

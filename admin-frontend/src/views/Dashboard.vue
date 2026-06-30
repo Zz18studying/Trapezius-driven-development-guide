@@ -33,12 +33,17 @@
         </el-col>
         <el-col :span="12">
           <el-card>
-            <template #header>热门话题词云</template>
+            <template #header>
+              <span>游客关注词云</span>
+              <span style="font-size: 12px; color: #999; margin-left: 8px;">
+                {{ keywordDateRange }} 内高频词 · TOP25
+              </span>
+            </template>
             <div style="position: relative; height: 300px; width: 100%;">
               <div ref="wordCloudChart" style="height: 100%; width: 100%;"></div>
-              <div v-if="hotTopics.length === 0" class="empty-state" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; text-align: center; pointer-events: none;">
+              <div v-if="hotKeywords.length === 0" class="empty-state" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; text-align: center; pointer-events: none;">
                 <div class="empty-icon">🕊️</div>
-                <div class="empty-text">暂无热门话题数据</div>
+                <div class="empty-text">暂无词云数据</div>
                 <div class="empty-desc">请等待更多游客对话</div>
               </div>
             </div>
@@ -50,7 +55,12 @@
       <el-row style="margin-top: 20px">
         <el-col :span="24">
           <el-card>
-            <template #header>游客满意度趋势（近30天）</template>
+            <template #header>
+              <span>游客满意度趋势（近30天）</span>
+              <span style="font-size: 12px; color: #999; margin-left: 8px;">
+                满意度 = (正面 + 0.85 × 中性) / (正面 + 中性 + 负面)
+              </span>
+            </template>
             <div ref="satisfactionChart" style="height: 300px; width: 100%;"></div>
           </el-card>
         </el-col>
@@ -61,7 +71,7 @@
 
 <script setup>
 import 'echarts-wordcloud'
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
@@ -75,7 +85,13 @@ const kpiList = ref([
   { icon: '💬', title: '累计会话总数', value: 0, trend: '', trendClass: '' }
 ])
 
-const hotTopics = ref([])
+const hotKeywords = ref([])
+const keywordDateRange = computed(() => {
+  const now = new Date()
+  const d = new Date()
+  d.setDate(d.getDate() - 6)
+  return `${d.getMonth()+1}月${d.getDate()}日-${now.getMonth()+1}月${now.getDate()}日`
+})
 
 // 图表引用
 const trendChart = ref(null)
@@ -86,14 +102,15 @@ const wordCloudChart = ref(null)
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/admin/dashboard/stats', {
-      params: { days: 7 }
-    })
+    const [statsRes, keywordsRes, satisfactionRes] = await Promise.all([
+      request.get('/api/admin/dashboard/stats', { params: { days: 7 } }),
+      request.get('/api/admin/dashboard/keywords', { params: { days: 7, limit: 25 } }),
+      request.get('/api/admin/dashboard/satisfaction-trend', { params: { days: 30 } })
+    ])
 
-    if (res.code === 0) {
-      // 增加默认值，防止后端返回的数据缺失字段
-      const { stats = {}, hot_topics = [] } = res.data
-
+    // ---- 处理统计 ----
+    if (statsRes.code === 0) {
+      const { stats = {} } = statsRes.data
       const todayCount = stats.today_count || 0
       const totalConversations = stats.total_conversations || 0
       const avgResponseTime = stats.avg_response_time || 0
@@ -110,23 +127,30 @@ const loadData = async () => {
         { icon: '⚡', title: '平均响应延迟', value: avgResponseTime.toFixed(1) + ' s', trend: '', trendClass: '' },
         { icon: '💬', title: '累计会话总数', value: totalConversations, trend: '', trendClass: '' }
       ]
-
-      hotTopics.value = hot_topics || []
-
-      // 确保 DOM 更新后再渲染图表
-      await nextTick()
-      // 给浏览器一点时间完成布局
-      setTimeout(() => {
-        // 仅当有数据时才渲染图表
-        if (stats.daily_stats && stats.daily_stats.length > 0) {
-          renderCharts(stats.daily_stats)
-        } else {
-          console.warn('无 daily_stats 数据，跳过图表渲染')
-        }
-      }, 100)
-    } else {
-      ElMessage.error(res.msg || '数据加载失败')
     }
+
+    // ---- 处理词云 ----
+    let keywordData = []
+    if (keywordsRes.code === 0) {
+      keywordData = keywordsRes.data || []
+      hotKeywords.value = keywordData
+    }
+
+    // ---- 处理满意度趋势 ----
+    let satisfactionData = []
+    if (satisfactionRes.code === 0) {
+      satisfactionData = satisfactionRes.data || []
+    }
+
+    await nextTick()
+    setTimeout(() => {
+      if (statsRes.code === 0 && statsRes.data.stats && statsRes.data.stats.daily_stats) {
+        renderTrendChart(statsRes.data.stats.daily_stats)
+      }
+      renderSatisfactionChart(satisfactionData)
+      renderWordCloud()
+    }, 200)
+
   } catch (error) {
     console.error('加载数据失败:', error)
     ElMessage.error('数据加载失败，请刷新重试')
@@ -135,157 +159,227 @@ const loadData = async () => {
   }
 }
 
-// ===================== 渲染图表 =====================
-const renderCharts = (dailyStats) => {
-  // ---- 1. 趋势图 ----
-  if (trendChart.value) {
-    try {
-      const chart = echarts.getInstanceByDom(trendChart.value) || echarts.init(trendChart.value)
+// ===================== 渲染趋势图 =====================
+const renderTrendChart = (dailyStats) => {
+  const container = trendChart.value
+  if (!container) return
 
-      // 动态生成近7天日期（从今天往前推）
-      const dateList = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date()
-        d.setDate(d.getDate() - (6 - i))
-        return `${d.getMonth() + 1}月${d.getDate()}日`
+  try {
+    const chart = echarts.getInstanceByDom(container) || echarts.init(container)
+    const dateList = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      return `${d.getMonth() + 1}月${d.getDate()}日`
+    })
+    const counts = dateList.map(dateStr => {
+      const match = dailyStats.find(d => {
+        const dDate = new Date(d.date)
+        return `${dDate.getMonth() + 1}月${dDate.getDate()}日` === dateStr
       })
+      return match ? match.count : 0
+    })
+    chart.setOption({
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'category', data: dateList, axisLabel: { rotate: 0, fontSize: 12 } },
+      yAxis: { type: 'value', name: '人次' },
+      series: [{
+        type: 'line',
+        data: counts,
+        smooth: true,
+        lineStyle: { color: '#10b981', width: 3 },
+        areaStyle: { opacity: 0.2, color: '#10b981' },
+        symbol: 'circle',
+        symbolSize: 8
+      }]
+    })
+    chart.resize()
+  } catch (e) {
+    console.warn('趋势图渲染失败:', e)
+  }
+}
 
-      // 从 dailyStats 中匹配数据
-      const counts = dateList.map(dateStr => {
-        const match = dailyStats.find(d => {
-          const dDate = new Date(d.date)
-          return `${dDate.getMonth() + 1}月${dDate.getDate()}日` === dateStr
-        })
-        return match ? match.count : 0
-      })
-
-      chart.setOption({
-        tooltip: { trigger: 'axis' },
-        xAxis: {
-          type: 'category',
-          data: dateList,
-          axisLabel: { rotate: 0, fontSize: 12 }
-        },
-        yAxis: { type: 'value', name: '人次' },
-        series: [{
-          type: 'line',
-          data: counts,
-          smooth: true,
-          lineStyle: { color: '#10b981', width: 3 },
-          areaStyle: { opacity: 0.2, color: '#10b981' },
-          symbol: 'circle',
-          symbolSize: 8
-        }]
-      })
-      chart.resize()
-    } catch (e) {
-      console.warn('趋势图渲染失败:', e)
-    }
+// ===================== 渲染满意度趋势图 =====================
+const renderSatisfactionChart = (data) => {
+  const container = satisfactionChart.value
+  if (!container) {
+    setTimeout(() => renderSatisfactionChart(data), 200)
+    return
   }
 
-  // ---- 2. 满意度趋势图 ----
-  if (satisfactionChart.value) {
-    try {
-      const chart = echarts.getInstanceByDom(satisfactionChart.value) || echarts.init(satisfactionChart.value)
-
-      const dateList = Array.from({ length: 30 }, (_, i) => {
-        const d = new Date()
-        d.setDate(d.getDate() - (29 - i))
-        return `${d.getMonth() + 1}月${d.getDate()}日`
-      })
-
-      const satisfactionData = Array.from({ length: 30 }, () => 80 + Math.floor(Math.random() * 15))
-
-      chart.setOption({
-        tooltip: { trigger: 'axis' },
-        xAxis: {
-          type: 'category',
-          data: dateList,
-          axisLabel: {
-            rotate: 30,
-            fontSize: 11
-          }
-        },
-        yAxis: { type: 'value', name: '满意度 (%)', min: 70, max: 100 },
-        series: [{
-          type: 'line',
-          data: satisfactionData,
-          smooth: true,
-          lineStyle: { color: '#3b82f6', width: 3 },
-          areaStyle: { opacity: 0.2, color: '#3b82f6' }
-        }]
-      })
-      chart.resize()
-    } catch (e) {
-      console.warn('满意度图渲染失败:', e)
-    }
+  const rect = container.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) {
+    setTimeout(() => renderSatisfactionChart(data), 200)
+    return
   }
 
-  // ---- 3. 词云图 ----
-  if (wordCloudChart.value && hotTopics.value.length > 0) {
-    try {
-      const container = wordCloudChart.value
-      const rect = container.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0) {
-        setTimeout(() => renderCharts(dailyStats), 200)
-        return
-      }
-      let chart = echarts.getInstanceByDom(container)
-      if (!chart) {
-        chart = echarts.init(container, null, {
-          width: rect.width,
-          height: rect.height
-        })
-      }
-      const data = hotTopics.value.slice(0, 10).map(item => ({
-        name: item.topic,
-        value: item.count
-      }))
+  try {
+    let chart = echarts.getInstanceByDom(container)
+    if (!chart) {
+      chart = echarts.init(container)
+    }
+
+    const validData = data.filter(d => d.satisfaction !== null)
+
+    if (validData.length === 0) {
+      chart.clear()
       chart.setOption({
-        tooltip: {
-          trigger: 'item',
-          formatter: function (params) {
-            return `<strong>${params.name}</strong><br/>提及次数：<strong>${params.value}</strong> 次`
-          },
-          backgroundColor: 'rgba(255,255,255,0.9)',
-          borderColor: '#10b981',
-          borderWidth: 2,
-          padding: [10, 15],
-          textStyle: {
-            color: '#333',
-            fontSize: 14
+        title: {
+          text: '暂无数据',
+          left: 'center',
+          top: 'center',
+          textStyle: { color: '#999', fontSize: 16, fontWeight: 'normal' }
+        }
+      })
+      return
+    }
+
+    const dateList = validData.map(d => d.date_display)
+    const satisfactionValues = validData.map(d => d.satisfaction)
+
+    chart.setOption({
+      tooltip: {
+        trigger: 'axis',
+        formatter: function(params) {
+          const idx = params[0].dataIndex
+          const item = validData[idx]
+          return `<strong>${item.date_display}</strong><br/>
+                  满意度：<strong>${item.satisfaction}%</strong><br/>
+                  正面：${item.positive} 条 | 中性：${item.neutral} 条 | 负面：${item.negative} 条`
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: dateList,
+        axisLabel: {
+          rotate: 30,
+          fontSize: 11,
+          interval: 2
+        }
+      },
+      yAxis: {
+        type: 'value',
+        name: '满意度 (%)',
+        min: 0,
+        max: 100,
+        axisLabel: {
+          formatter: '{value}%'
+        }
+      },
+      series: [{
+        type: 'line',
+        data: satisfactionValues,
+        smooth: true,
+        lineStyle: { color: '#3b82f6', width: 3 },
+        areaStyle: { opacity: 0.2, color: '#3b82f6' },
+        symbol: 'circle',
+        symbolSize: 8,
+        itemStyle: {
+          color: function(params) {
+            const val = params.value
+            if (val >= 70) return '#10b981'
+            if (val >= 50) return '#f59e0b'
+            return '#ef4444'
           }
         },
-        series: [{
-          type: 'wordCloud',
-          gridSize: 12,
-          sizeRange: [16, 48],
-          rotationRange: [0, 0],
-          shape: 'circle',
-          width: '100%',
-          height: '100%',
-          textStyle: {
-            color: function () {
-              return 'hsl(' + Math.round(Math.random() * 360) + ', 70%, 50%)'
-            },
-            fontWeight: 'bold',
-            fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif'
-          },
-          data: data,
-          emphasis: {
-            focus: 'self',
-            textStyle: {
-              shadowBlur: 10,
-              shadowColor: '#333'
-            }
-          }
-        }]
+        markLine: {
+          data: [
+            { yAxis: 70, label: { formatter: '良好线 70%', color: '#10b981' } },
+            { yAxis: 50, label: { formatter: '及格线 50%', color: '#f59e0b' } }
+          ],
+          lineStyle: { type: 'dashed', color: '#999' },
+          label: { fontSize: 10, color: '#999' }
+        }
+      }]
+    })
+
+    setTimeout(() => {
+      chart.resize()
+    }, 50)
+
+    console.log('✅ 满意度趋势图渲染成功')
+  } catch (e) {
+    console.warn('满意度趋势图渲染失败:', e)
+  }
+}
+
+// ===================== 渲染词云图 =====================
+const renderWordCloud = () => {
+  const container = wordCloudChart.value
+  if (!container) {
+    setTimeout(renderWordCloud, 200)
+    return
+  }
+
+  const rect = container.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) {
+    setTimeout(renderWordCloud, 200)
+    return
+  }
+
+  try {
+    let chart = echarts.getInstanceByDom(container)
+    if (!chart) {
+      chart = echarts.init(container, null, {
+        width: rect.width,
+        height: rect.height
       })
-      setTimeout(() => {
-        chart.resize()
-      }, 50)
-    } catch (e) {
-      console.warn('词云图渲染失败:', e)
     }
+
+    const data = hotKeywords.value.map(item => ({
+      name: item.keyword,
+      value: item.count
+    }))
+
+    if (data.length === 0) {
+      chart.clear()
+      return
+    }
+
+    chart.setOption({
+      tooltip: {
+        trigger: 'item',
+        formatter: function(params) {
+          return `<strong>${params.name}</strong><br/>提及次数：<strong>${params.value}</strong> 次`
+        },
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderColor: '#10b981',
+        borderWidth: 2,
+        padding: [10, 15],
+        textStyle: { color: '#333', fontSize: 14 }
+      },
+      series: [{
+        type: 'wordCloud',
+        gridSize: 12,           // 增大间距，避免文字重叠
+        sizeRange: [18, 58],    // 字号范围调大
+        rotationRange: [0, 0],
+        shape: 'circle',
+        width: '100%',
+        height: '100%',
+        textStyle: {
+          color: function() {
+            return 'hsl(' + Math.round(Math.random() * 360) + ', 70%, 50%)'
+          },
+          fontWeight: 'bold',
+          fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif'
+        },
+        data: data,
+        emphasis: {
+          focus: 'self',
+          textStyle: {
+            shadowBlur: 10,
+            shadowColor: '#333'
+          }
+        }
+      }]
+    })
+
+    setTimeout(() => {
+      chart.resize()
+    }, 50)
+
+    console.log('✅ 词云图渲染成功，关键词数:', data.length)
+  } catch (e) {
+    console.warn('词云图渲染失败:', e)
   }
 }
 

@@ -143,10 +143,10 @@ async def sentiment_suggestions(days: int = 7):
 
 
 @router.get("/sentiment/high-risk")
-async def high_risk_sessions(days: int = 7, threshold: int = 2):
+async def high_risk_sessions(days: int = 7, threshold: str = "high"):
     """
     获取高风险会话列表（情绪持续下降）
-    threshold: 负面情绪出现次数阈值，默认2次
+    threshold: high | medium | low
     """
     data = get_high_risk_sessions(days, threshold)
     return {"code": 0, "data": data, "msg": "success"}
@@ -200,7 +200,7 @@ async def get_conversations(
     page_size: int = 50
 ):
     """
-    按日期、情绪、会话ID查询对话记录
+    按日期、情绪、会话ID查询对话记录（单条列表）
     """
     from models.database import SessionLocal, Conversation
     from datetime import datetime
@@ -280,6 +280,7 @@ async def get_conversations(
 async def get_conversations_by_session(
     date: Optional[str] = None,
     sentiment: Optional[str] = None,
+    session_id: Optional[str] = None,
     page: int = 1,
     page_size: int = 20
 ):
@@ -308,40 +309,32 @@ async def get_conversations_by_session(
             today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             query = db.query(Conversation).filter(Conversation.created_at >= today_start)
 
+        # 会话ID搜索（在原始查询中过滤）
+        if session_id and session_id.strip():
+            query = query.filter(Conversation.session_id.like(f"%{session_id.strip()}%"))
+
         # 获取所有对话
         all_conversations = query.order_by(Conversation.created_at.asc()).all()
 
         # 按 session_id 分组
         session_map = defaultdict(list)
         for c in all_conversations:
-            # 如果情绪筛选不为空，只保留包含该情绪的会话
-            if sentiment and sentiment in ["positive", "neutral", "negative"]:
-                if c.sentiment == sentiment:
-                    session_map[c.session_id].append(c)
-            else:
-                session_map[c.session_id].append(c)
+            session_map[c.session_id].append(c)
 
-        # 如果情绪筛选不为空，但会话中可能有多条，需要保留完整的会话内容
-        # 但上面的逻辑已经确保只添加了匹配的会话，问题是一个会话可能只有部分消息匹配
-        # 更准确的做法：先找出所有包含匹配情绪的 session_id，再完整加载这些会话
+        # 情绪筛选：如果指定了情绪，只保留包含该情绪的会话
         if sentiment and sentiment in ["positive", "neutral", "negative"]:
-            # 找出所有包含匹配情绪的 session_id
             matched_session_ids = set()
             for c in all_conversations:
                 if c.sentiment == sentiment:
                     matched_session_ids.add(c.session_id)
-            
-            # 重新加载这些会话的完整内容
-            session_map = defaultdict(list)
-            for c in all_conversations:
-                if c.session_id in matched_session_ids:
-                    session_map[c.session_id].append(c)
+            # 只保留匹配的会话
+            session_map = {sid: convs for sid, convs in session_map.items() if sid in matched_session_ids}
 
         # 转换为列表
         sessions = []
-        for session_id, convs in session_map.items():
+        for sid, convs in session_map.items():
             sessions.append({
-                "session_id": session_id,
+                "session_id": sid,
                 "total_turns": len(convs),
                 "sentiment_stats": {
                     "positive": sum(1 for c in convs if c.sentiment == "positive"),
@@ -382,6 +375,85 @@ async def get_conversations_by_session(
         }
     except Exception as e:
         print(f"[按会话查询] 错误: {e}")
+        return {"code": 1, "msg": str(e), "data": None}
+    finally:
+        db.close()
+
+
+# ============================================================
+# 词云 API（真正的词云）
+# ============================================================
+@router.get("/dashboard/keywords")
+async def get_hot_keywords(days: int = 7, limit: int = 25):
+    """
+    获取热门关键词（真正的词云数据）
+    从用户对话中提取高频关键词
+    """
+    from services.keyword_service import get_hot_keywords as get_keywords
+    keywords = get_keywords(days, limit)
+    return {"code": 0, "data": keywords, "msg": "success"}
+
+
+# ============================================================
+# 满意度趋势 API（真实数据）
+# ============================================================
+@router.get("/dashboard/satisfaction-trend")
+async def get_satisfaction_trend(days: int = 30):
+    """
+    获取近 N 天每天的满意度趋势
+    满意度 = (正面 + 0.85 × 中性) / (正面 + 中性 + 负面) × 100%
+    中性按 0.85 权重计入
+    """
+    from models.database import SessionLocal, Conversation
+    from datetime import datetime, timedelta
+
+    db = SessionLocal()
+    try:
+        trend = []
+        for i in range(days - 1, -1, -1):
+            date = datetime.now() - timedelta(days=i)
+            date_start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            date_end = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            positive = db.query(Conversation).filter(
+                Conversation.created_at >= date_start,
+                Conversation.created_at <= date_end,
+                Conversation.sentiment == "positive"
+            ).count()
+
+            neutral = db.query(Conversation).filter(
+                Conversation.created_at >= date_start,
+                Conversation.created_at <= date_end,
+                Conversation.sentiment == "neutral"
+            ).count()
+
+            negative = db.query(Conversation).filter(
+                Conversation.created_at >= date_start,
+                Conversation.created_at <= date_end,
+                Conversation.sentiment == "negative"
+            ).count()
+
+            total = positive + neutral + negative
+
+            if total > 0:
+                weighted_positive = positive + 0.85 * neutral
+                satisfaction = round(weighted_positive / total * 100, 1)
+            else:
+                satisfaction = None
+
+            trend.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "date_display": f"{date.month}月{date.day}日",
+                "satisfaction": satisfaction,
+                "positive": positive,
+                "neutral": neutral,
+                "negative": negative,
+                "total": total
+            })
+
+        return {"code": 0, "data": trend, "msg": "success"}
+    except Exception as e:
+        print(f"[满意度趋势] 错误: {e}")
         return {"code": 1, "msg": str(e), "data": None}
     finally:
         db.close()

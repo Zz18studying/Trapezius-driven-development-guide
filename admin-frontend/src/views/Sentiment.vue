@@ -22,15 +22,15 @@
             <el-table-column prop="count" label="提及次数" />
             <el-table-column label="占比" width="100">
               <template #default="{ row }">
-                <span v-if="overview.total_conversations > 0">
-                  {{ ((row.count / overview.total_conversations) * 100).toFixed(1) }}%
+                <span v-if="totalMentions > 0">
+                  {{ ((row.count / totalMentions) * 100).toFixed(1) }}%
                 </span>
                 <span v-else>0%</span>
               </template>
             </el-table-column>
           </el-table>
-          <div v-if="hotTopics.length > 0 && overview.total_conversations > 0" style="margin-top: 8px; font-size: 12px; color: #999;">
-            * 注意：一条对话可能匹配多个话题，故占比之和可能超过100%
+          <div v-if="hotTopics.length > 0 && totalMentions > 0" style="margin-top: 8px; font-size: 12px; color: #999;">
+            * 占比 = 该话题提及次数 / 所有话题提及次数之和 × 100%
           </div>
         </el-card>
       </el-col>
@@ -77,7 +77,7 @@
       <el-col :span="24">
         <el-card>
           <template #header>
-            <span>⚠️ 高风险会话（情绪持续下降）</span>
+            <span>⚠️ 高风险会话</span>
             <el-tag v-if="highRiskSessions.length > 0" type="danger" size="small" style="margin-left: 12px;">
               共 {{ highRiskSessions.length }} 个
             </el-tag>
@@ -89,7 +89,28 @@
           <el-table v-else :data="highRiskSessions" stripe>
             <el-table-column prop="session_id" label="会话ID" min-width="150" show-overflow-tooltip />
             <el-table-column prop="total_turns" label="对话轮数" width="100" />
-            <el-table-column prop="negative_count" label="负面次数" width="100" />
+            <el-table-column label="风险等级" width="110">
+              <template #default="{ row }">
+                <el-tag :type="row.risk_level === 'high' ? 'danger' : row.risk_level === 'medium' ? 'warning' : 'info'" size="small">
+                  {{ row.risk_level === 'high' ? '🔴 高' : row.risk_level === 'medium' ? '🟡 中' : '🟢 低' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="风险评分" width="100">
+              <template #default="{ row }">
+                <span :style="{ 
+                  color: row.risk_score >= 60 ? '#f56c6c' : row.risk_score >= 30 ? '#e6a23c' : '#67c23a',
+                  fontWeight: 'bold'
+                }">
+                  {{ row.risk_score }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="末段负面密度" width="120">
+              <template #default="{ row }">
+                <span>{{ row.negative_density || 0 }}%</span>
+              </template>
+            </el-table-column>
             <el-table-column label="起始情绪" width="100">
               <template #default="{ row }">
                 <el-tag :type="getSentimentType(row.start_sentiment)" size="small">
@@ -104,14 +125,6 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="趋势" width="120">
-              <template #default>
-                <div class="trend-badge">
-                  <el-icon color="#f56c6c"><TrendCharts /></el-icon>
-                  <span>持续下降</span>
-                </div>
-              </template>
-            </el-table-column>
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="primary" @click="viewSessionHistory(row.session_id)">
@@ -120,6 +133,9 @@
               </template>
             </el-table-column>
           </el-table>
+          <div v-if="highRiskSessions.length > 0" style="margin-top: 12px; font-size: 12px; color: #999;">
+            💡 风险评分 ≥ 60 为高风险，30-59 为中风险，&lt; 30 为低风险
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -198,7 +214,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { Monitor, TrendCharts } from '@element-plus/icons-vue'
@@ -232,6 +248,12 @@ const overview = ref({
 })
 
 const hotTopics = ref([])
+
+// 计算总提及次数（用于占比计算）
+const totalMentions = computed(() => {
+  return hotTopics.value.reduce((sum, t) => sum + t.count, 0)
+})
+
 const suggestions = ref([])
 const highRiskSessions = ref([])
 
@@ -279,15 +301,12 @@ const fetchOverview = async () => {
     if (res.data.code === 0) {
       overview.value = res.data.data
     } else {
-      // 如果 code 不是 0，保留默认空值
       console.warn('API 返回 code 非 0', res.data)
     }
   } catch (err) {
     console.error('获取总览失败:', err)
-    // 失败时保留默认空值
   } finally {
     loading.value.overview = false
-    // 无论成功与否，都尝试渲染饼图
     await nextTick()
     setTimeout(() => {
       renderPieChart()
@@ -326,7 +345,8 @@ const fetchSuggestions = async () => {
 const fetchHighRiskSessions = async () => {
   loading.value.highRisk = true
   try {
-    const res = await axios.get(`${API_BASE}/sentiment/high-risk?days=7&threshold=2`)
+    // threshold 参数改为 high/medium/low
+    const res = await axios.get(`${API_BASE}/sentiment/high-risk?days=7&threshold=high`)
     if (res.data.code === 0) {
       highRiskSessions.value = res.data.data
     }
@@ -356,7 +376,6 @@ const renderPieChart = () => {
   }
 
   try {
-    // 复用或创建实例
     chartInstance = echarts.getInstanceByDom(container)
     if (!chartInstance) {
       chartInstance = echarts.init(container)
@@ -385,34 +404,16 @@ const renderPieChart = () => {
         radius: ['40%', '65%'],
         center: ['50%', '45%'],
         data: [
-          {
-            name: '正面',
-            value: dist.positive || 0,
-            itemStyle: { color: '#10b981' }
-          },
-          {
-            name: '中性',
-            value: dist.neutral || 0,
-            itemStyle: { color: '#f59e0b' }
-          },
-          {
-            name: '负面',
-            value: dist.negative || 0,
-            itemStyle: { color: '#ef4444' }
-          }
+          { name: '正面', value: dist.positive || 0, itemStyle: { color: '#10b981' } },
+          { name: '中性', value: dist.neutral || 0, itemStyle: { color: '#f59e0b' } },
+          { name: '负面', value: dist.negative || 0, itemStyle: { color: '#ef4444' } }
         ],
         emphasis: { scale: true },
-        label: {
-          show: true,
-          formatter: '{d}%'
-        },
-        labelLine: {
-          show: true
-        }
+        label: { show: true, formatter: '{d}%' },
+        labelLine: { show: true }
       }]
     })
 
-    // 渲染完成后调整大小
     setTimeout(() => {
       chartInstance?.resize()
     }, 50)
@@ -449,7 +450,7 @@ const viewSessionHistory = async (sessionId) => {
 }
 
 // ============================================================
-// 高级报告操作（生成 / 收起 / 展开 / 导出）
+// 高级报告操作
 // ============================================================
 const generateAdvancedReport = async () => {
   if (isGenerating.value) {
@@ -476,10 +477,8 @@ const generateAdvancedReport = async () => {
 
 const toggleReport = () => {
   if (!advancedReport.value) {
-    // 如果没有报告，直接生成
     generateAdvancedReport()
   } else {
-    // 切换可见状态
     reportVisible.value = !reportVisible.value
   }
 }
@@ -528,14 +527,12 @@ const exportSessionHistory = () => {
 // 生命周期
 // ============================================================
 onMounted(async () => {
-  // 1. 恢复缓存的报告
   const cached = localStorage.getItem('sentiment_report')
   if (cached) {
     advancedReport.value = cached
-    reportVisible.value = true   // 有缓存时默认展开
+    reportVisible.value = true
   }
 
-  // 2. 并行加载所有数据
   await Promise.all([
     fetchOverview(),
     fetchHotTopics(),
@@ -543,7 +540,6 @@ onMounted(async () => {
     fetchHighRiskSessions()
   ])
 
-  // 3. 保底渲染：如果 2 秒后饼图仍没渲染，强制再试一次
   setTimeout(() => {
     if (!chartInstance) {
       console.warn('保底渲染：饼图未初始化')
@@ -552,14 +548,12 @@ onMounted(async () => {
   }, 2000)
 })
 
-// 窗口大小变化时重绘饼图
 window.addEventListener('resize', () => {
   if (chartInstance) {
     setTimeout(() => chartInstance?.resize(), 100)
   }
 })
 
-// 监听 advancedReport 变化，同步到 localStorage
 watch(advancedReport, (newVal) => {
   if (newVal) {
     localStorage.setItem('sentiment_report', newVal)
@@ -589,7 +583,6 @@ watch(advancedReport, (newVal) => {
   margin-bottom: 12px;
   border-left: 4px solid var(--el-color-primary);
 }
-
 .suggestion-item:last-child {
   margin-bottom: 0;
 }
@@ -619,7 +612,6 @@ watch(advancedReport, (newVal) => {
   border-radius: 4px;
   margin-top: 4px;
 }
-
 .suggestion-action .el-icon {
   font-size: 16px;
 }
@@ -636,30 +628,12 @@ watch(advancedReport, (newVal) => {
   word-break: break-word;
 }
 
-.trend-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: linear-gradient(135deg, #fef2f2, #fee2e2);
-  color: #dc2626;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.trend-badge .el-icon {
-  font-size: 16px;
-}
-
 :deep(.el-timeline) {
   padding: 0;
 }
-
 :deep(.el-timeline-item__content) {
   padding: 0;
 }
-
 :deep(.el-card__body) {
   padding: 12px 16px;
 }

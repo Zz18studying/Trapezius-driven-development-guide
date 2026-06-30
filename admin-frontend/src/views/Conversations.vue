@@ -17,13 +17,17 @@
         <el-col :span="5">
           <el-select v-model="searchSentiment" placeholder="全部情绪" clearable style="width: 100%" @change="handleSearch">
             <el-option label="全部会话" value="" />
-            <el-option label="😊 含正面" value="positive" />
-            <el-option label="😐 含中性" value="neutral" />
-            <el-option label="😡 含负面" value="negative" />
+            <el-option label="😊 正面" value="positive" />
+            <el-option label="😡 负面" value="negative" />
           </el-select>
         </el-col>
         <el-col :span="7">
-          <el-input v-model="searchSessionId" placeholder="搜索会话ID" clearable @keyup.enter="handleSearch" />
+          <el-input
+            v-model="searchSessionId"
+            placeholder="搜索会话ID（支持部分匹配）"
+            clearable
+            @keyup.enter="handleSearch"
+          />
         </el-col>
         <el-col :span="6">
           <el-button type="primary" @click="handleSearch">查询</el-button>
@@ -32,102 +36,119 @@
         </el-col>
       </el-row>
       <div style="margin-top: 10px; font-size: 13px; color: #999;">
-        💡 默认按会话分组展示完整对话，共 {{ total }} 个会话
+        💡 共 {{ total }} 个会话，点击卡片查看完整对话
       </div>
     </el-card>
 
-    <!-- 统计信息 -->
-    <el-card style="margin-top: 20px">
-      <el-row :gutter="20">
-        <el-col :span="6">
-          <el-statistic title="总会话数" :value="total" />
-        </el-col>
-        <el-col :span="6">
-          <el-statistic title="😊 含正面" :value="stats.positive || 0" />
-        </el-col>
-        <el-col :span="6">
-          <el-statistic title="😐 含中性" :value="stats.neutral || 0" />
-        </el-col>
-        <el-col :span="6">
-          <el-statistic title="😡 含负面" :value="stats.negative || 0" />
-        </el-col>
-      </el-row>
-    </el-card>
+    <!-- 会话卡片列表 -->
+    <div v-if="loading" class="loading-text">加载中...</div>
+    <div v-else-if="sessions.length === 0" class="empty-text">
+      <div class="empty-icon">📭</div>
+      <div>暂无对话记录</div>
+    </div>
+    <div v-else class="session-list">
+      <el-card
+        v-for="session in sessions"
+        :key="session.session_id"
+        class="session-card"
+        shadow="hover"
+        @click="openSessionDialog(session)"
+      >
+        <template #header>
+          <div class="card-header">
+            <div class="header-left">
+              <span class="session-id">{{ session.session_id }}</span>
+              <span class="session-turns">共 {{ session.total_turns }} 轮</span>
+            </div>
+            <div class="header-right">
+              <el-tag size="small" type="success">
+                😊 {{ session.sentiment_stats.positive }}
+              </el-tag>
+              <el-tag size="small" type="warning">
+                😐 {{ session.sentiment_stats.neutral }}
+              </el-tag>
+              <el-tag size="small" type="danger">
+                😡 {{ session.sentiment_stats.negative }}
+              </el-tag>
+              <span class="session-time">{{ session.conversations[0]?.created_at || '' }}</span>
+            </div>
+          </div>
+        </template>
+        <div class="card-content">
+          <div v-if="session.conversations.length > 0" class="preview-message">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>{{ session.conversations[0].user_question }}</span>
+          </div>
+          <div class="card-hint">点击查看完整对话 →</div>
+        </div>
+      </el-card>
 
-    <!-- 会话列表（按 session_id 分组） -->
-    <el-card style="margin-top: 20px">
-      <div v-if="loading" class="loading-text">加载中...</div>
-      <div v-else-if="sessions.length === 0" class="empty-text">暂无对话记录</div>
-      <div v-else>
-        <!-- 每个会话一个卡片 -->
-        <el-collapse v-model="activeNames" accordion>
-          <el-collapse-item
-            v-for="(session, index) in sessions"
-            :key="session.session_id"
-            :name="index"
+      <!-- 分页 -->
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50]"
+        layout="total, sizes, prev, pager, next"
+        @change="loadData"
+        style="margin-top: 20px; justify-content: flex-end"
+      />
+    </div>
+
+    <!-- 会话详情对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="'会话详情：' + currentSession?.session_id"
+      width="80%"
+      top="5vh"
+    >
+      <div v-if="currentSession" class="dialog-content">
+        <div class="dialog-stats">
+          <span>共 {{ currentSession.total_turns }} 轮对话</span>
+          <span>😊 {{ currentSession.sentiment_stats.positive }}</span>
+          <span>😐 {{ currentSession.sentiment_stats.neutral }}</span>
+          <span>😡 {{ currentSession.sentiment_stats.negative }}</span>
+        </div>
+        <el-timeline>
+          <el-timeline-item
+            v-for="conv in currentSession.conversations"
+            :key="conv.turn"
+            :timestamp="conv.created_at"
+            :type="getTimelineType(conv.sentiment)"
+            placement="top"
           >
-            <template #title>
-              <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
-                <el-tag type="info" size="small">{{ session.session_id }}</el-tag>
-                <span style="font-size: 13px; color: #666;">共 {{ session.total_turns }} 轮</span>
-                <span style="font-size: 13px; color: #666;">
-                  😊 {{ session.sentiment_stats.positive }}
-                  😐 {{ session.sentiment_stats.neutral }}
-                  😡 {{ session.sentiment_stats.negative }}
-                </span>
-                <span style="font-size: 12px; color: #999; margin-left: auto;">
-                  {{ session.conversations[0]?.created_at || '' }}
-                </span>
+            <el-card shadow="hover" :body-style="{ padding: '12px 16px' }">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <el-tag :type="getTagType(conv.sentiment)" size="small">
+                  {{ getSentimentLabel(conv.sentiment) }}
+                </el-tag>
+                <span style="font-size: 12px; color: #999;">第 {{ conv.turn }} 轮</span>
+                <span style="font-size: 12px; color: #999; margin-left: auto;">响应 {{ conv.response_time }}s</span>
               </div>
-            </template>
-
-            <!-- 会话内的完整对话 -->
-            <el-timeline>
-              <el-timeline-item
-                v-for="conv in session.conversations"
-                :key="conv.turn"
-                :timestamp="conv.created_at"
-                :type="getTimelineType(conv.sentiment)"
-                placement="top"
-              >
-                <el-card shadow="hover" :body-style="{ padding: '12px 16px' }">
-                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    <el-tag :type="getTagType(conv.sentiment)" size="small">
-                      {{ getSentimentLabel(conv.sentiment) }}
-                    </el-tag>
-                    <span style="font-size: 12px; color: #999;">第 {{ conv.turn }} 轮</span>
-                    <span style="font-size: 12px; color: #999; margin-left: auto;">响应 {{ conv.response_time }}s</span>
-                  </div>
-                  <div style="color: #409EFF; margin-bottom: 4px; font-size: 14px;">
-                    <strong>👤 用户：</strong>{{ conv.user_question }}
-                  </div>
-                  <div style="color: #67C23A; font-size: 14px;">
-                    <strong>🤖 小灵：</strong>{{ conv.ai_answer }}
-                  </div>
-                </el-card>
-              </el-timeline-item>
-            </el-timeline>
-          </el-collapse-item>
-        </el-collapse>
-
-        <!-- 分页 -->
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          @change="loadData"
-          style="margin-top: 16px; justify-content: flex-end"
-        />
+              <!-- 用户问题 -->
+              <div style="margin-bottom: 4px; font-size: 14px; padding: 4px 8px; background: #f0f4f8; border-radius: 4px;">
+                <strong>用户：</strong>{{ conv.user_question }}
+              </div>
+              <!-- AI回答 -->
+              <div style="font-size: 14px; padding: 4px 8px; background: #e8f5e9; border-radius: 4px;">
+                <strong>小灵：</strong>{{ conv.ai_answer }}
+              </div>
+            </el-card>
+          </el-timeline-item>
+        </el-timeline>
       </div>
-    </el-card>
+      <template #footer>
+        <el-button @click="dialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="exportSession">导出会话</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const API_BASE = '/api/admin'
@@ -143,18 +164,10 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
-const activeNames = ref([])
 
-// 统计
-const stats = computed(() => {
-  const s = { positive: 0, neutral: 0, negative: 0 }
-  sessions.value.forEach(session => {
-    s.positive += session.sentiment_stats.positive || 0
-    s.neutral += session.sentiment_stats.neutral || 0
-    s.negative += session.sentiment_stats.negative || 0
-  })
-  return s
-})
+// 对话框
+const dialogVisible = ref(false)
+const currentSession = ref(null)
 
 // ============================================================
 // 工具函数
@@ -192,10 +205,6 @@ const loadData = async () => {
     if (res.data.code === 0) {
       sessions.value = res.data.data.items
       total.value = res.data.data.total
-      // 默认展开第一个
-      if (sessions.value.length > 0) {
-        activeNames.value = [0]
-      }
     } else {
       ElMessage.warning(res.data.msg || '查询失败')
     }
@@ -221,6 +230,11 @@ const resetFilters = () => {
   searchSessionId.value = ''
   page.value = 1
   loadData()
+}
+
+const openSessionDialog = (session) => {
+  currentSession.value = session
+  dialogVisible.value = true
 }
 
 const exportData = async () => {
@@ -270,6 +284,31 @@ const exportData = async () => {
   }
 }
 
+const exportSession = () => {
+  if (!currentSession.value) return
+  const session = currentSession.value
+  let text = `会话ID：${session.session_id}\n`
+  text += `导出时间：${new Date().toLocaleString()}\n`
+  text += `总轮数：${session.total_turns}\n`
+  text += `情绪统计：正面 ${session.sentiment_stats.positive}，中性 ${session.sentiment_stats.neutral}，负面 ${session.sentiment_stats.negative}\n`
+  text += '='.repeat(60) + '\n\n'
+  
+  session.conversations.forEach(conv => {
+    text += `[第${conv.turn}轮] ${conv.created_at} [${conv.sentiment}]\n`
+    text += `问：${conv.user_question}\n`
+    text += `答：${conv.ai_answer}\n`
+    text += '-'.repeat(40) + '\n'
+  })
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `会话_${session.session_id}_${new Date().toISOString().slice(0, 10)}.txt`
+  link.click()
+  URL.revokeObjectURL(link.href)
+  ElMessage.success('导出成功！')
+}
+
 // ============================================================
 // 生命周期
 // ============================================================
@@ -283,41 +322,138 @@ onMounted(() => {
   text-align: center;
   color: #999;
   padding: 40px 0;
+  font-size: 16px;
 }
 
 .empty-text {
   text-align: center;
   color: #999;
-  padding: 40px 0;
+  padding: 60px 0;
   font-size: 16px;
 }
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
 
-:deep(.el-collapse-item__header) {
+.session-list {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.session-card {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 12px;
+}
+.session-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.session-id {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a3a4a;
+  background: #f0f4f8;
+  padding: 2px 10px;
+  border-radius: 6px;
+}
+
+.session-turns {
+  font-size: 13px;
+  color: #6a8a9a;
+}
+
+.session-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.card-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.preview-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 14px;
+  flex: 1;
+  overflow: hidden;
+}
+.preview-message .el-icon {
+  font-size: 18px;
+  color: #5ba3c7;
+  flex-shrink: 0;
+}
+.preview-message span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-hint {
+  font-size: 13px;
+  color: #5ba3c7;
+  flex-shrink: 0;
+}
+
+.dialog-content {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.dialog-stats {
+  display: flex;
+  gap: 20px;
   padding: 12px 16px;
   background: #f8fafc;
   border-radius: 8px;
-  border: 1px solid #e8ecf0;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #475569;
 }
-
-:deep(.el-collapse-item__wrap) {
-  border: 1px solid #e8ecf0;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-}
-
-:deep(.el-collapse-item__content) {
-  padding: 16px;
+.dialog-stats span {
+  font-weight: 500;
 }
 
 :deep(.el-timeline) {
   padding: 0;
 }
-
 :deep(.el-timeline-item__content) {
   padding: 0;
 }
-
-:deep(.el-card) {
-  border-radius: 8px;
+:deep(.el-card__body) {
+  padding: 12px 16px;
 }
 </style>
