@@ -19,7 +19,50 @@ from services.llm_service import get_llm_service
 from services.db_service import save_conversation
 from services.sentiment_service import analyze_sentiment
 from models.database import SessionLocal, Conversation
+
 router = APIRouter(prefix="/api/chat", tags=["对话"])
+
+
+# ==================== 景点名称列表与过滤函数 ====================
+ATTRACTION_NAMES = [
+    "灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城", "祥符禅寺",
+    "拈花广场", "梵天花海", "香月花街", "五灯湖", "灵山大照壁",
+    "阿育王柱", "百子戏弥勒", "曼飞龙塔", "无尽意斋", "鹿鸣谷",
+    "灵山精舍", "菩提大道", "五明桥", "佛足坛", "五智门",
+    "降魔浮雕", "佛教文化博览馆"
+]
+
+
+def extract_attraction_name(question: str) -> Optional[str]:
+    """从用户问题中提取景点名称"""
+    for name in ATTRACTION_NAMES:
+        if name in question:
+            return name
+    return None
+
+
+def filter_sources_by_attraction(sources: List[dict], question: str) -> List[dict]:
+    """过滤检索结果，优先保留景点名称匹配的"""
+    if not sources:
+        return sources
+    
+    attraction_name = extract_attraction_name(question)
+    if not attraction_name:
+        return sources
+    
+    matched = []
+    unmatched = []
+    for source in sources:
+        if attraction_name in source.get('question', ''):
+            matched.append(source)
+        else:
+            unmatched.append(source)
+    
+    # 如果有匹配的，只返回匹配的；否则返回全部（让后续流程处理）
+    if matched:
+        print(f"[API] 景点过滤: 保留 {len(matched)} 条匹配 '{attraction_name}' 的结果")
+        return matched
+    return sources
 
 
 class ChatRequest(BaseModel):
@@ -75,27 +118,39 @@ def ask(request: ChatRequest):
     rag_service = get_rag_service()
     llm_service = get_llm_service()
 
+    # ==================== 新增：解析指代词（必须在RAG检索之前） ====================
+    resolved_question = llm_service.resolve_pronoun(request.question, request.session_id)
+    print(f"[API] 解析后问题: {resolved_question}")
+    # ==============================================================================
+
     context = ""
     sources = []
 
     if request.use_rag and rag_service.is_ready():
         rag_start = time.time()
-        search_result = rag_service.search(request.question, request.n_results)
+        # 使用解析后的问题检索
+        search_result = rag_service.search(resolved_question, request.n_results)
         print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
 
         if search_result['success'] and search_result['results']:
             sources = search_result['results'][:3]
-            context = rag_service.get_context(request.question, request.n_results)
+            # 按景点名称过滤（传入解析后的问题）
+            sources = filter_sources_by_attraction(sources, resolved_question)
+            # 手动构建 context，避免重复调用 get_context（内部会再次检索）
+            context_parts = []
+            for i, r in enumerate(sources[:request.n_results], 1):
+                context_parts.append(f"【参考{i}】\n问题：{r['question']}\n答案：{r['answer']}")
+            context = "\n\n".join(context_parts)
 
     fast_answer = is_fast_path_answer(sources)
     if fast_answer:
         print(f"[API] ⚡ 快速路径命中！总耗时: {time.time() - total_start:.2f}秒")
-        sentiment = analyze_sentiment(request.question)
+        sentiment = analyze_sentiment(resolved_question)
         try:
             sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
             save_conversation(
                 session_id=request.session_id or "unknown",
-                question=request.question,
+                question=resolved_question,  # 保存解析后的问题
                 answer=fast_answer,
                 sources=sources_json,
                 response_time=time.time() - total_start,
@@ -103,6 +158,10 @@ def ask(request: ChatRequest):
             )
         except Exception as e:
             print(f"[API] 保存对话记录失败: {e}")
+        # 更新会话的 last_question，以便下一轮指代
+        if request.session_id:
+            session_data = llm_service.get_or_create_session(request.session_id)
+            session_data["last_question"] = resolved_question
         return ChatResponse(
             success=True,
             answer=fast_answer,
@@ -111,6 +170,10 @@ def ask(request: ChatRequest):
         )
 
     if request.use_rag and not context:
+        # 即使无 context，也要保存 last_question
+        if request.session_id:
+            session_data = llm_service.get_or_create_session(request.session_id)
+            session_data["last_question"] = resolved_question
         return ChatResponse(
             success=True,
             answer="抱歉，目前知识库中暂无相关信息。",
@@ -120,7 +183,7 @@ def ask(request: ChatRequest):
 
     llm_start = time.time()
     llm_result = llm_service.chat(
-        question=request.question,
+        question=resolved_question,  # 传入解析后的问题
         context=context,
         session_id=request.session_id
     )
@@ -138,14 +201,14 @@ def ask(request: ChatRequest):
             error=llm_result['error']
         )
 
-    sentiment = analyze_sentiment(request.question)
+    sentiment = analyze_sentiment(resolved_question)
     answer = llm_result['answer']
 
     try:
         sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
         save_conversation(
             session_id=request.session_id or "unknown",
-            question=request.question,
+            question=resolved_question,  # 保存解析后的问题
             answer=answer,
             sources=sources_json,
             response_time=time.time() - total_start,

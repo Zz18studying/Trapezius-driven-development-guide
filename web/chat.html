@@ -531,6 +531,7 @@
         let audioChunks = [];
         let isRecording = false;
         let recordTimer = null;
+        let messageCounter = 0;
 
         // ============================================================
         // 3. 对话辅助函数
@@ -588,7 +589,7 @@
         }
 
         // ============================================================
-        // 4. 流式发送消息
+        // 4. 发送消息（非流式，修复ID冲突）
         // ============================================================
         async function sendMessage(question) {
             if (!question) {
@@ -607,6 +608,10 @@
             sendBtn.disabled = true;
             voiceBtn.disabled = true;
 
+            // 生成唯一消息ID
+            const msgId = 'msg_' + Date.now() + '_' + (++messageCounter);
+
+            // 添加用户消息
             const userDiv = document.createElement('div');
             userDiv.className = 'message user';
             userDiv.innerHTML = `
@@ -619,102 +624,78 @@
             chatMessages.appendChild(userDiv);
             scrollToBottom();
 
+            // 创建助手消息气泡（使用唯一ID）
             const assistantDiv = document.createElement('div');
             assistantDiv.className = 'message assistant';
-            assistantDiv.id = 'streaming-message';
+            assistantDiv.id = msgId;
             assistantDiv.innerHTML = `
                 <div class="message-avatar">
                     <img src="images/assistant-avatar.png" alt="小灵" class="avatar-img">
                 </div>
                 <div class="message-content">
-                    <span id="streaming-text"></span><span class="cursor-blink"></span>
+                    <span class="assistant-text-${msgId}">⏳ 思考中...</span>
                     <div class="message-time">${getTimeString()}</div>
                 </div>
             `;
             chatMessages.appendChild(assistantDiv);
             scrollToBottom();
 
-            let fullAnswer = '';
-            const streamingText = document.getElementById('streaming-text');
+            // 在 assistantDiv 上存储当前消息ID，方便更新
+            assistantDiv.dataset.msgId = msgId;
 
             try {
-                const response = await fetch(`/api/chat/ask/stream`, {
+                const response = await fetch(`/api/chat/ask`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         question: question,
                         session_id: sessionId,
                         use_rag: true,
-                        n_results: 3,
-                        verify: false
+                        n_results: 3
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                const data = await response.json();
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        if (!line.startsWith('data: ')) continue;
-                        const jsonStr = line.slice(6).trim();
-                        if (!jsonStr) continue;
-
-                        try {
-                            const data = JSON.parse(jsonStr);
-                            if (data.type === 'token') {
-                                fullAnswer += data.content;
-                                streamingText.textContent = fullAnswer;
-                                scrollToBottom();
-                            } else if (data.type === 'done') {
-                                const cursor = assistantDiv.querySelector('.cursor-blink');
-                                if (cursor) cursor.remove();
-                                streamingText.textContent = data.content || fullAnswer;
-
-                                if (data.sources && data.sources.length > 0) {
-                                    const tag = document.createElement('div');
-                                    tag.className = 'source-tag';
-                                    tag.textContent = `来源：${data.sources.length} 条知识库匹配`;
-                                    assistantDiv.querySelector('.message-content').appendChild(tag);
-                                }
-
-                                const timeEl = assistantDiv.querySelector('.message-time');
-                                if (timeEl) timeEl.textContent = getTimeString();
-
-                                if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
-                                    window.digitalHuman.speak(data.content || fullAnswer)
-                                        .catch(err => console.warn('数字人语音播放失败:', err));
-                                }
-
-                                assistantDiv.id = '';
-                                return;
-                            } else if (data.type === 'error') {
-                                throw new Error(data.content || '未知错误');
-                            }
-                        } catch (e) {
-                            console.warn('解析 SSE 数据失败:', line, e);
+                // 通过保存的引用更新内容（使用assistantDiv引用，不用getElementById）
+                const textSpan = assistantDiv.querySelector(`.assistant-text-${msgId}`);
+                if (textSpan) {
+                    if (data.success && data.answer) {
+                        textSpan.textContent = data.answer;
+                        // 如果有来源信息，添加来源标签
+                        if (data.sources && data.sources.length > 0) {
+                            // 移除旧的来源标签（如果有）
+                            const oldTag = assistantDiv.querySelector('.source-tag');
+                            if (oldTag) oldTag.remove();
+                            const tag = document.createElement('div');
+                            tag.className = 'source-tag';
+                            tag.textContent = `📚 来源：${data.sources.length} 条知识库匹配`;
+                            assistantDiv.querySelector('.message-content').appendChild(tag);
                         }
+                        // 数字人语音播报
+                        if (window.digitalHuman && typeof window.digitalHuman.speak === 'function') {
+                            window.digitalHuman.speak(data.answer)
+                                .catch(err => console.warn('数字人语音播放失败:', err));
+                        }
+                    } else {
+                        textSpan.textContent = data.answer || '服务暂时不可用，请稍后再试。';
                     }
                 }
 
-                throw new Error('流式响应意外结束');
-            } catch (err) {
-                console.error('流式请求失败:', err);
-                streamingText.textContent = '提示：' + (err.message || '网络连接失败，请检查后端服务');
-                const cursor = assistantDiv.querySelector('.cursor-blink');
-                if (cursor) cursor.remove();
+                // 更新时间
+                const timeEl = assistantDiv.querySelector('.message-time');
+                if (timeEl) timeEl.textContent = getTimeString();
+
+                // 移除消息ID，避免被意外复用
                 assistantDiv.id = '';
+                assistantDiv.removeAttribute('data-msg-id');
+
+            } catch (err) {
+                console.error('请求失败:', err);
+                const textSpan = assistantDiv.querySelector(`.assistant-text-${msgId}`);
+                if (textSpan) {
+                    textSpan.textContent = '❌ 网络开小差了，请稍后再试。';
+                }
                 const timeEl = assistantDiv.querySelector('.message-time');
                 if (timeEl) timeEl.textContent = getTimeString();
             } finally {
@@ -722,6 +703,11 @@
                 sendBtn.disabled = false;
                 voiceBtn.disabled = false;
                 messageInput.focus();
+                // 即使出错也清除ID
+                if (assistantDiv) {
+                    assistantDiv.id = '';
+                    assistantDiv.removeAttribute('data-msg-id');
+                }
             }
         }
 
@@ -788,7 +774,7 @@
         }
 
         // ============================================================
-        // 6. 数字人控制模块
+        // 6. 数字人控制模块（保持不变）
         // ============================================================
         const DigitalHuman = {
             app: null,
@@ -1225,7 +1211,7 @@
         messageInput.focus();
 
         console.log('AI导游页面已加载');
-        console.log('流式API: /api/chat/ask/stream');
+        console.log('API: /api/chat/ask (非流式)');
         console.log(`会话ID: ${sessionId || '未初始化'}`);
     </script>
 

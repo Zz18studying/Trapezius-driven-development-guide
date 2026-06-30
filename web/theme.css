@@ -1688,6 +1688,201 @@ section.page-header p {
     height: 176px !important;
 }
 
+.scenic-map-card {
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 252, 253, 0.94)) !important;
+}
+
+.map-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 18px 10px;
+}
+
+.map-header h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    color: var(--ink);
+}
+
+.map-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.map-pill {
+    flex: 0 0 auto;
+    padding: 5px 10px;
+    border-radius: 999px;
+    color: #8b5a09;
+    font-size: 11px;
+    font-weight: 700;
+    background: linear-gradient(135deg, rgba(241, 212, 138, 0.34), #fff);
+    border: 1px solid rgba(215, 168, 79, 0.22);
+}
+
+.map-canvas {
+    padding: 0 12px 12px;
+    max-height: min(68vh, 720px);
+    overflow: auto;
+}
+
+.scenic-map {
+    width: 100%;
+    aspect-ratio: 820 / 520;
+    display: block;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #edf8fa;
+    box-shadow: inset 0 0 0 1px rgba(31, 111, 140, 0.10);
+}
+
+.scenic-map.real-map {
+    aspect-ratio: 974 / 1114;
+    min-height: 520px;
+    background: #dcecf2;
+}
+
+.real-map-shade {
+    fill: rgba(9, 31, 43, 0.10);
+}
+
+.map-bg {
+    fill: #edf8fa;
+}
+
+.map-water {
+    fill: url(#mapWater);
+    opacity: 0.82;
+}
+
+.map-mountain {
+    fill: rgba(31, 111, 140, 0.08);
+}
+
+.map-road {
+    fill: none;
+    stroke: rgba(31, 111, 140, 0.23);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 2 12;
+}
+
+.map-road.secondary {
+    stroke-width: 4;
+    stroke: rgba(31, 111, 140, 0.15);
+}
+
+.map-route-glow {
+    stroke: rgba(255, 216, 89, 0.88);
+    stroke-width: 28;
+    stroke-linecap: round;
+    filter: url(#routeGlow);
+    opacity: 0.72;
+}
+
+.map-route-line {
+    stroke: url(#mapRouteGradient);
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.map-route-focus {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.88);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 16 18;
+    animation: mapDash 1.6s linear infinite;
+}
+
+@keyframes mapDash {
+    to {
+        stroke-dashoffset: -42;
+    }
+}
+
+.map-node {
+    transition: transform 0.22s ease;
+}
+
+.node-ring {
+    fill: #ffffff;
+    stroke: rgba(13, 58, 78, 0.38);
+    stroke-width: 3;
+    filter: drop-shadow(0 6px 10px rgba(13, 58, 78, 0.14));
+}
+
+.node-dot {
+    fill: #6d8794;
+}
+
+.node-label {
+    text-anchor: middle;
+    font-size: 28px;
+    font-weight: 800;
+    fill: rgba(18, 50, 65, 0.86);
+    paint-order: stroke;
+    stroke: rgba(255, 255, 255, 0.92);
+    stroke-width: 8px;
+    stroke-linejoin: round;
+}
+
+.map-node.active .node-ring {
+    fill: #fff8e5;
+    stroke: rgba(215, 168, 79, 0.92);
+    stroke-width: 3;
+}
+
+.map-node.active .node-dot {
+    fill: var(--brand);
+}
+
+.map-node.active .node-label {
+    fill: var(--ink);
+}
+
+.node-order {
+    text-anchor: middle;
+    font-size: 12px;
+    font-weight: 900;
+    fill: #ffffff;
+    pointer-events: none;
+}
+
+.map-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 18px 18px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.map-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #8da9b6;
+}
+
+.legend-dot.active {
+    background: linear-gradient(135deg, var(--gold-2), var(--brand));
+}
+
 /* Spots */
 body:has(.cards-container) .main-content {
     display: flex !important;
@@ -1826,6 +2021,10 @@ body:has(.cards-container) .main-content {
         grid-template-columns: 1fr 1fr !important;
     }
 
+    .scenic-map-card {
+        grid-column: 1 / -1;
+    }
+
     .routes-list .route-card {
         grid-template-columns: 5px minmax(180px, 220px) minmax(0, 1fr) !important;
     }
@@ -1886,6 +2085,10 @@ body:has(.cards-container) .main-content {
 
     .side-panel {
         grid-template-columns: 1fr !important;
+    }
+
+    .node-label {
+        font-size: 22px;
     }
 
     .detail-container .detail-body {

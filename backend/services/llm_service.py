@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-大模型调用服务 - 精简优化版（响应时间优化）
+大模型调用服务 - 精简优化版（仅负面情绪反馈 + 指代词替换修复）
 """
 
 import os
 import sys
 import json
 import re
-from openai import OpenAI, AsyncOpenAI
+from openai import OpenAI
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
@@ -28,13 +28,8 @@ class LLMService:
             base_url="https://api.deepseek.com",
             timeout=10.0
         )
-        self.async_client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url="https://api.deepseek.com",
-            timeout=10.0
-        )
         self.model = getattr(config, 'DEEPSEEK_MODEL', 'deepseek-v4-flash')
-        print(f"✅ LLM服务初始化成功（DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知 + 路线规划）")
+        print(f"✅ LLM服务初始化成功（DeepSeek API + 对话记忆 + 用户画像 + 环境感知 + 情绪感知精简版）")
         print(f"   模型: {self.model}")
 
     def is_ready(self):
@@ -202,147 +197,83 @@ class LLMService:
             context["has_constraint"] = True
         return context
 
-    def _analyze_emotion_trend(self, emotion_history: list) -> dict:
-        if not emotion_history or len(emotion_history) < 2:
-            return {"trend": "stable", "last_emotions": [e.get("emotion", "neutral") for e in emotion_history[-3:]], "alert": False, "message": "情绪状态稳定"}
-        emotion_weights = {"severe_negative": 10, "moderate_negative": 7, "fatigue": 6, "confusion": 5, "mild_negative": 4, "mild_positive": 3, "neutral": 0, "positive": -7, "strong_positive": -10}
-        recent = emotion_history[-5:]
-        recent_emotions = [e.get("emotion", "neutral") for e in recent]
-        recent_scores = [emotion_weights.get(e, 0) for e in recent_emotions]
-        if len(recent_scores) >= 3:
-            if recent_scores[-1] > recent_scores[-2] and recent_scores[-2] > recent_scores[-3]:
-                return {"trend": "deteriorating", "last_emotions": recent_emotions[-3:], "alert": True, "message": "情绪持续恶化"}
-            elif recent_scores[-1] < recent_scores[-2] and recent_scores[-2] < recent_scores[-3]:
-                return {"trend": "improving", "last_emotions": recent_emotions[-3:], "alert": False, "message": "情绪好转"}
-            else:
-                if recent_scores[-1] > recent_scores[-2] and recent_scores[-2] > 3:
-                    return {"trend": "deteriorating", "last_emotions": recent_emotions[-3:], "alert": True, "message": "情绪有恶化趋势"}
-                elif recent_scores[-1] < recent_scores[-2] and recent_scores[-2] < -3:
-                    return {"trend": "improving", "last_emotions": recent_emotions[-3:], "alert": False, "message": "情绪好转"}
-                else:
-                    return {"trend": "fluctuating", "last_emotions": recent_emotions[-3:], "alert": False, "message": "情绪有波动"}
-        else:
-            if recent_scores[-1] > recent_scores[-2] and recent_scores[-1] > 3:
-                return {"trend": "deteriorating", "last_emotions": recent_emotions[-3:], "alert": True, "message": "情绪恶化"}
-            elif recent_scores[-1] < recent_scores[-2] and recent_scores[-1] < -3:
-                return {"trend": "improving", "last_emotions": recent_emotions[-3:], "alert": False, "message": "情绪好转"}
-            else:
-                return {"trend": "stable", "last_emotions": recent_emotions[-3:], "alert": False, "message": "情绪稳定"}
-
     def _detect_emotion(self, question: str, history: list = None, emotion_history: list = None) -> dict:
-        severe_negative_patterns = [r'太差|极差|垃圾|后悔来|再也不来|劝退|浪费时间|浪费钱|坑人|被骗|太失望', r'投诉|差评|服务差|态度差|体验极差|强烈不满|简直无语|太过分了|真受不了', r'白来了|不如不来|毫无意义|后悔死了|不值票价']
-        moderate_negative_patterns = [r'不好玩|一般般|失望|不满意', r'不值', r'真没意思|没意思|真一般|很一般', r'太热|太晒|太冷|太挤|人太多|排队太久|太贵|性价比低', r'体验不好|有点失望|比想象差|落差大']
-        mild_negative_patterns = [r'还行吧|也还好|不算太差|马马虎虎|将就|凑合', r'有点累|一般般吧|还可以吧|中等|差强人意']
-        fatigue_patterns = [r'累了?', r'太累', r'走不动', r'好累', r'疲惫', r'脚痛|腿酸|腰酸', r'体力不支|走不动了|歇一会|休息一下|坐一下']
-        confusion_patterns = [r'不清楚|不知道|怎么走|迷路了|找不到|在哪|这里在哪', r'我该去哪|怎么去|怎么走|困惑|不明白|什么意思']
-        mild_positive_patterns = [r'还可以|还行|不错|还可以吧|挺好的|蛮好|还行吧', r'值得|还好|没那么差|算可以|过得去']
-        positive_patterns = [r'好玩', r'开心', r'满意', r'很棒', r'不错', r'值得', r'喜欢', r'推荐', r'美丽', r'好看']
-        strong_positive_patterns = [r'太震撼|震撼到了|太美|太漂亮|绝了|无敌|完美', r'特别值得|太棒了|真绝|非常满意|超级好']
+        """
+        精简情绪检测：只检测负面情绪（投诉/不满/疲惫）
+        """
+        complaint_patterns = [
+            r'太差|极差|垃圾|后悔来|再也不来|劝退|浪费时间|浪费钱|坑人|被骗|太失望',
+            r'投诉|差评|服务差|态度差|体验极差|强烈不满|简直无语|太过分了|真受不了',
+            r'白来了|不如不来|毫无意义|后悔死了|不值票价'
+        ]
+        dissatisfaction_patterns = [
+            r'不好玩|一般般|失望|不满意', r'不值', r'真没意思|没意思|真一般|很一般',
+            r'太热|太晒|太冷|太挤|人太多|排队太久|太贵|性价比低',
+            r'体验不好|有点失望|比想象差|落差大'
+        ]
+        fatigue_patterns = [
+            r'累了?', r'太累', r'走不动', r'好累', r'疲惫', r'脚痛|腿酸|腰酸',
+            r'体力不支|走不动了|歇一会|休息一下|坐一下'
+        ]
 
-        triggered_severe_negative = []
-        triggered_moderate_negative = []
-        triggered_mild_negative = []
-        triggered_fatigue = []
-        triggered_confusion = []
-        triggered_mild_positive = []
-        triggered_positive = []
-        triggered_strong_positive = []
         is_complaint = False
+        is_fatigue = False
+        is_dissatisfied = False
 
-        for pattern in severe_negative_patterns:
+        for pattern in complaint_patterns:
             if re.search(pattern, question):
-                triggered_severe_negative.append(pattern)
                 is_complaint = True
-        for pattern in moderate_negative_patterns:
-            if re.search(pattern, question):
-                triggered_moderate_negative.append(pattern)
-        for pattern in mild_negative_patterns:
-            if re.search(pattern, question):
-                triggered_mild_negative.append(pattern)
+                break
         for pattern in fatigue_patterns:
             if re.search(pattern, question):
-                triggered_fatigue.append(pattern)
-        for pattern in confusion_patterns:
-            if re.search(pattern, question):
-                triggered_confusion.append(pattern)
-        for pattern in mild_positive_patterns:
-            if re.search(pattern, question):
-                triggered_mild_positive.append(pattern)
-        for pattern in positive_patterns:
-            if re.search(pattern, question):
-                triggered_positive.append(pattern)
-        for pattern in strong_positive_patterns:
-            if re.search(pattern, question):
-                triggered_strong_positive.append(pattern)
+                is_fatigue = True
+                break
+        if not is_complaint:
+            for pattern in dissatisfaction_patterns:
+                if re.search(pattern, question):
+                    is_dissatisfied = True
+                    break
 
-        if is_complaint or triggered_severe_negative:
-            emotion = "severe_negative"
-            intensity = 10
-            weight = 2.0
-            trigger_words = triggered_severe_negative
-        elif triggered_moderate_negative:
-            emotion = "moderate_negative"
-            intensity = 7
-            weight = 1.8
-            trigger_words = triggered_moderate_negative
-        elif triggered_fatigue:
-            emotion = "fatigue"
-            intensity = 6
-            weight = 1.5
-            trigger_words = triggered_fatigue
-        elif triggered_confusion:
-            emotion = "confusion"
-            intensity = 5
-            weight = 1.3
-            trigger_words = triggered_confusion
-        elif triggered_mild_negative:
-            emotion = "mild_negative"
-            intensity = 4
-            weight = 1.3
-            trigger_words = triggered_mild_negative
-        elif triggered_strong_positive:
-            emotion = "strong_positive"
-            intensity = 9
-            weight = 1.0
-            trigger_words = triggered_strong_positive
-        elif triggered_positive:
-            emotion = "positive"
-            intensity = 7
-            weight = 1.0
-            trigger_words = triggered_positive
-        elif triggered_mild_positive:
-            emotion = "mild_positive"
-            intensity = 5
-            weight = 1.0
-            trigger_words = triggered_mild_positive
+        if is_complaint:
+            return {
+                "emotion": "complaint",
+                "has_emotion": True,
+                "intensity": 9,
+                "weight": 2.0,
+                "trigger_words": ["投诉"],
+                "is_complaint": True,
+                "is_fatigue": False
+            }
+        elif is_fatigue:
+            return {
+                "emotion": "fatigue",
+                "has_emotion": True,
+                "intensity": 7,
+                "weight": 1.5,
+                "trigger_words": ["累了"],
+                "is_complaint": False,
+                "is_fatigue": True
+            }
+        elif is_dissatisfied:
+            return {
+                "emotion": "dissatisfied",
+                "has_emotion": True,
+                "intensity": 5,
+                "weight": 1.3,
+                "trigger_words": ["不满"],
+                "is_complaint": False,
+                "is_fatigue": False
+            }
         else:
-            if emotion_history and len(emotion_history) > 0:
-                recent_negatives = [e for e in emotion_history[-3:] if e.get("emotion") in ["severe_negative", "moderate_negative", "mild_negative", "fatigue", "confusion"]]
-                if recent_negatives:
-                    return {"emotion": "neutral", "has_emotion": False, "intensity": 1, "weight": 0.8, "trigger_words": [], "is_complaint": False, "trend": "recovering", "residual": True}
-            return {"emotion": "neutral", "has_emotion": False, "intensity": 0, "weight": 1.0, "trigger_words": [], "is_complaint": False, "trend": "stable"}
-
-        trend_info = self._analyze_emotion_trend(emotion_history)
-        adjusted_weight = weight
-        if trend_info.get("trend") == "deteriorating" and emotion in ["severe_negative", "moderate_negative", "mild_negative", "fatigue", "confusion"]:
-            adjusted_weight = weight * 1.2
-            print(f"[LLM] 情绪累积：恶化趋势，权重 {weight}→{adjusted_weight}")
-        if trend_info.get("alert") and emotion in ["severe_negative", "moderate_negative", "mild_negative", "fatigue", "confusion"]:
-            adjusted_weight = adjusted_weight * 1.15
-            print(f"[LLM] 情绪累积：连续负面，权重提升至 {adjusted_weight}")
-
-        return {
-            "emotion": emotion,
-            "has_emotion": True,
-            "intensity": intensity,
-            "weight": min(adjusted_weight, 3.0),
-            "trigger_words": trigger_words,
-            "is_complaint": is_complaint,
-            "trend": trend_info.get("trend", "new"),
-            "trend_message": trend_info.get("message", ""),
-            "trend_alert": trend_info.get("alert", False),
-            "last_emotions": trend_info.get("last_emotions", [])
-        }
+            return {
+                "emotion": "neutral",
+                "has_emotion": False,
+                "intensity": 0,
+                "weight": 1.0,
+                "trigger_words": [],
+                "is_complaint": False,
+                "is_fatigue": False
+            }
 
     def _detect_interest(self, question: str, stored_interests: list = None) -> dict:
         if re.search(r'孩子|小孩|带.*孩子|带.*老人|亲子|家庭', question):
@@ -384,6 +315,61 @@ class LLMService:
             return True
         return False
 
+    def _get_last_attraction_from_history(self, history: list) -> str:
+        """从对话历史中提取上一轮提到的景点名称（从user消息中提取）"""
+        if not history:
+            return None
+        attraction_names = ["灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城", "祥符禅寺", 
+                            "拈花广场", "梵天花海", "香月花街", "五灯湖", "灵山大照壁", 
+                            "阿育王柱", "百子戏弥勒", "曼飞龙塔", "无尽意斋", "鹿鸣谷",
+                            "灵山精舍", "菩提大道", "五明桥", "佛足坛", "五智门",
+                            "降魔浮雕", "佛教文化博览馆"]
+        for msg in reversed(history):
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                for name in attraction_names:
+                    if name in content:
+                        return name
+        return None
+
+    # ==================== 新增：公开方法，供 API 层调用 ====================
+    def resolve_pronoun(self, question: str, session_id: str) -> str:
+        """将问题中的指代词（它/这个/那个等）替换为上一轮提到的景点名称"""
+        if not session_id or not question:
+            return question
+
+        session_data = self.get_or_create_session(session_id)
+        last_question = session_data.get("last_question", "")
+        history = session_data.get("history", [])
+
+        if not self._is_follow_up_question(question, last_question):
+            return question
+
+        if re.search(r'^(它|这个|那个|这|那)', question):
+            last_attraction = None
+            # 优先从 last_question 提取
+            if last_question:
+                attraction_names = [
+                    "灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城", "祥符禅寺",
+                    "拈花广场", "梵天花海", "香月花街", "五灯湖", "灵山大照壁",
+                    "阿育王柱", "百子戏弥勒", "曼飞龙塔", "无尽意斋", "鹿鸣谷",
+                    "灵山精舍", "菩提大道", "五明桥", "佛足坛", "五智门",
+                    "降魔浮雕", "佛教文化博览馆"
+                ]
+                for name in attraction_names:
+                    if name in last_question:
+                        last_attraction = name
+                        break
+            if not last_attraction:
+                last_attraction = self._get_last_attraction_from_history(history)
+
+            if last_attraction:
+                new_q = re.sub(r'^(它|这个|那个|这|那)', last_attraction, question)
+                print(f"[LLM] 指代词替换: '{question}' → '{new_q}'")
+                return new_q
+        return question
+    # ========================================================================
+
     def chat(self, question: str, context: str = "", session_id: str = None, history: list = None) -> dict:
         if not self.is_ready():
             return {"success": False, "answer": "", "error": "LLM not ready"}
@@ -392,15 +378,19 @@ class LLMService:
             session_data = self.get_or_create_session(session_id)
             history = session_data.get("history", [])
             last_context = session_data.get("last_context", "")
+            last_question = session_data.get("last_question", "")
             stored_interests = session_data.get("interests", [])
             stored_travel_context = session_data.get("travel_context", {})
+            emotion_history = session_data.get("emotion_history", [])
             print(f"[LLM] session: interests={stored_interests}")
         else:
             session_data = None
             history = history or []
             last_context = ""
+            last_question = ""
             stored_interests = []
             stored_travel_context = {}
+            emotion_history = []
 
         # 社交问题直接回复
         if self._is_social_question(question):
@@ -408,16 +398,58 @@ class LLMService:
             if session_id and session_data:
                 session_data["history"].append({"role": "user", "content": question})
                 session_data["history"].append({"role": "assistant", "content": answer})
+                session_data["last_question"] = question
             return {"success": True, "answer": answer, "error": None}
 
-        # 复用context
+        # ===== 判断是否为追问，替换指代词（注意：现在 API 层已经提前处理了，这里保留作为备用） =====
+        is_follow_up = self._is_follow_up_question(question, last_question)
+        original_question = question
+        if is_follow_up:
+            if re.search(r'^(它|这个|那个|这|那)', question):
+                last_attraction = None
+                if last_question:
+                    attraction_names = ["灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城", "祥符禅寺", 
+                                        "拈花广场", "梵天花海", "香月花街", "五灯湖", "灵山大照壁", 
+                                        "阿育王柱", "百子戏弥勒", "曼飞龙塔", "无尽意斋", "鹿鸣谷",
+                                        "灵山精舍", "菩提大道", "五明桥", "佛足坛", "五智门",
+                                        "降魔浮雕", "佛教文化博览馆"]
+                    for name in attraction_names:
+                        if name in last_question:
+                            last_attraction = name
+                            break
+                if not last_attraction:
+                    last_attraction = self._get_last_attraction_from_history(history)
+                if last_attraction:
+                    question = re.sub(r'^(它|这个|那个|这|那)', last_attraction, question)
+                    print(f"[LLM] 指代词替换: '{original_question}' → '{question}'")
+            
+            if not context and last_context:
+                print(f"[LLM] 检测到追问，复用上一轮 context")
+                if ("特色" in question or "看点" in question or "亮点" in question) and "特色" not in last_context:
+                    print(f"[LLM] 追问主题变化，强制重新检索")
+                    context = ""
+                else:
+                    context = last_context
+
+        # 复用context（非追问场景）
         if not context and last_context:
             context = last_context
 
-        # 检测情绪
-        emotion_info = self._detect_emotion(question)
+        # ===== 精简情绪检测（仅检测负面） =====
+        emotion_info = self._detect_emotion(question, history, emotion_history)
         if emotion_info.get("has_emotion"):
-            print(f"[LLM] 情绪: {emotion_info['emotion']}")
+            print(f"[LLM] 情绪: {emotion_info['emotion']} (权重: {emotion_info['weight']}×)")
+            if session_data:
+                session_data["last_emotion"] = emotion_info
+                emotion_history.append({
+                    "emotion": emotion_info["emotion"],
+                    "intensity": emotion_info["intensity"],
+                    "weight": emotion_info["weight"],
+                    "is_complaint": emotion_info.get("is_complaint", False)
+                })
+                if len(emotion_history) > 5:
+                    emotion_history = emotion_history[-5:]
+                session_data["emotion_history"] = emotion_history
 
         # 检测兴趣
         is_route_question = self._is_route_question(question)
@@ -458,8 +490,9 @@ class LLMService:
 
         if context and session_data:
             session_data["last_context"] = context
+        session_data["last_question"] = original_question  # 存储原始问题，以便下一轮追踪
 
-        # ===== 精简版 System Prompt（约500字符） =====
+        # ===== 精简版 System Prompt =====
         system_prompt = """
 你是灵山AI导游"小灵"，依据【参考资料】回答问题。
 
@@ -469,32 +502,23 @@ class LLMService:
 3. 问"好玩吗"→先引用事实，再建议。
 4. 用户问路线时才提供详细路线。
 5. 不用**、*、#。句号结尾。段落空行。
-
-【情绪】负面→先道歉；疲惫→推荐休息点；正面→热情回应。
 """
 
-        # ===== 精简情绪指令（1行） =====
+        # ===== 仅负面情绪指令 =====
         if emotion_info.get("has_emotion"):
             emotion = emotion_info["emotion"]
-            if emotion == "severe_negative" or emotion_info.get("is_complaint"):
-                system_prompt += "\n→ 用户投诉，先道歉，询问原因，提供替代方案。"
-            elif emotion == "moderate_negative":
-                system_prompt += "\n→ 用户不满，共情回应，主动调整推荐方向。"
+            if emotion == "complaint":
+                system_prompt += """
+【情绪】用户投诉。→ 先道歉，询问原因，提供替代方案，表达解决诚意。
+"""
             elif emotion == "fatigue":
-                system_prompt += "\n→ 用户疲惫，推荐休息点（灵山精舍、菩提大道、鹿鸣谷）。"
-            elif emotion == "confusion":
-                system_prompt += "\n→ 用户困惑，清晰指引，不绕弯子。"
-            elif emotion == "mild_negative":
-                system_prompt += "\n→ 用户轻微失望，轻松回应，提供替代方案。"
-            elif emotion == "strong_positive":
-                system_prompt += "\n→ 用户非常震撼，热情回应，推荐同类体验。"
-            elif emotion == "positive":
-                system_prompt += "\n→ 用户满意，自然回应，推荐类似景点。"
-            elif emotion == "mild_positive":
-                system_prompt += "\n→ 用户情绪不错，保持亲切语气。"
-            # 趋势预警
-            if emotion_info.get("trend_alert"):
-                system_prompt += "\n⚠️ 用户情绪持续恶化，需特别注意关怀。"
+                system_prompt += """
+【情绪】用户疲惫。→ 关心状态；推荐休息点（灵山精舍、菩提大道、鹿鸣谷、梵宫内休息区）；主动询问是否调整路线。
+"""
+            elif emotion == "dissatisfied":
+                system_prompt += """
+【情绪】用户不满。→ 共情回应，主动调整推荐方向。
+"""
 
         # ===== 精简用户画像 =====
         user_profile_parts = []
@@ -527,7 +551,7 @@ class LLMService:
 
         messages = [{"role": "system", "content": system_prompt}]
         if history:
-            messages.extend(history[-5:])  # 从10条降到5条
+            messages.extend(history[-5:])
 
         user_message = question
         if context:
@@ -540,13 +564,13 @@ class LLMService:
                 model=self.model,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=512  # 从1024降到512
+                max_tokens=384
             )
             answer = response.choices[0].message.content
             answer = self._clean_answer(answer)
 
             if session_data:
-                session_data["history"].append({"role": "user", "content": question})
+                session_data["history"].append({"role": "user", "content": original_question})
                 session_data["history"].append({"role": "assistant", "content": answer})
                 if len(session_data["history"]) > 20:
                     session_data["history"] = session_data["history"][-20:]
@@ -556,16 +580,10 @@ class LLMService:
             print(f"❌ API调用失败: {e}")
             return {"success": False, "answer": "", "error": str(e)}
 
-    def _light_clean(self, text):
-        """轻量清洗，用于实时流式输出"""
-        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-        text = re.sub(r'(^|\s)\*\s+', r'\1· ', text)
-        text = re.sub(r'#', '', text)
-        return text
-
     def _clean_answer(self, answer):
-        """完整清洗，用于最终保存"""
-        answer = self._light_clean(answer)
+        answer = re.sub(r'\*\*([^*]+)\*\*', r'\1', answer)
+        answer = re.sub(r'(^|\s)\*\s+', r'\1· ', answer, flags=re.MULTILINE)
+        answer = re.sub(r'#', '', answer)
         answer = re.sub(r'\n{3,}', '\n', answer)
         answer = re.sub(r'([。！？])(?!\n)', r'\1\n', answer)
         answer = re.sub(r'\n{2,}', '\n\n', answer)
@@ -574,386 +592,6 @@ class LLMService:
     def clear_session(self, session_id: str):
         if session_id in self.sessions:
             del self.sessions[session_id]
-
-    def stream_chat(self, question: str, context: str = "", session_id: str = None, history: list = None):
-        """同步流式接口（兼容旧代码）"""
-        for chunk in self._stream_chat_internal(question, context, session_id, history):
-            yield chunk
-
-    async def astream_chat(self, question: str, context: str = "", session_id: str = None, history: list = None):
-        """异步流式接口（真正的流式响应）"""
-        if not self.is_ready():
-            yield {"type": "error", "content": "LLM not ready"}
-            return
-
-        if session_id:
-            session_data = self.get_or_create_session(session_id)
-            history = session_data.get("history", [])
-            last_context = session_data.get("last_context", "")
-            stored_interests = session_data.get("interests", [])
-            stored_travel_context = session_data.get("travel_context", {})
-            print(f"[LLM] stream session: interests={stored_interests}")
-        else:
-            session_data = None
-            history = history or []
-            last_context = ""
-            stored_interests = []
-            stored_travel_context = {}
-
-        # 社交问题直接回复（流式也返回完整）
-        if self._is_social_question(question):
-            answer = self._generate_social_response(question, history)
-            if session_data:
-                session_data["history"].append({"role": "user", "content": question})
-                session_data["history"].append({"role": "assistant", "content": answer})
-                session_data["last_question"] = question
-            yield {"type": "token", "content": answer}
-            yield {"type": "done", "content": answer}
-            return
-
-        # 复用context
-        if not context and last_context:
-            context = last_context
-
-        # 检测情绪
-        emotion_info = self._detect_emotion(question)
-        if emotion_info.get("has_emotion"):
-            print(f"[LLM] stream 情绪: {emotion_info['emotion']}")
-
-        # 检测兴趣
-        is_route_question = self._is_route_question(question)
-        interest_info = self._detect_interest(question, stored_interests)
-        print(f"[LLM] stream 兴趣: {interest_info.get('route_key') if interest_info.get('has_interest') else '无'}")
-
-        travel_context = self._extract_travel_context_from_question(question)
-
-        # 保存兴趣
-        if interest_info.get("has_interest") and not interest_info.get("from_memory"):
-            new_interest = interest_info["route_key"]
-            if new_interest not in stored_interests:
-                stored_interests.append(new_interest)
-                if session_data:
-                    session_data["interests"] = stored_interests
-
-        if travel_context.get("has_constraint"):
-            merged_travel_context = stored_travel_context.copy()
-            if travel_context.get("with_children"):
-                merged_travel_context["with_children"] = True
-            if travel_context.get("with_elderly"):
-                merged_travel_context["with_elderly"] = True
-            if travel_context.get("time_constraint") in ["half_day", "quick"]:
-                merged_travel_context["time_constraint"] = travel_context["time_constraint"]
-            if session_data:
-                session_data["travel_context"] = merged_travel_context
-
-        final_travel_context = stored_travel_context.copy()
-        if travel_context.get("has_constraint"):
-            if travel_context.get("with_children"):
-                final_travel_context["with_children"] = True
-            if travel_context.get("with_elderly"):
-                final_travel_context["with_elderly"] = True
-            if travel_context.get("time_constraint") in ["half_day", "quick"]:
-                final_travel_context["time_constraint"] = travel_context["time_constraint"]
-
-        if context and session_data:
-            session_data["last_context"] = context
-        if session_data:
-            session_data["last_question"] = question
-
-        # ===== 精简版 System Prompt（与chat一致） =====
-        system_prompt = """
-你是灵山AI导游"小灵"，依据【参考资料】回答问题。
-
-【规则】
-1. 只用参考资料数据，不编造、不推测。
-2. 涉及高度/价格/时间必须引用具体数值。
-3. 问"好玩吗"→先引用事实，再建议。
-4. 用户问路线时才提供详细路线。
-5. 不用**、*、#。句号结尾。段落空行。
-
-【情绪】负面→先道歉；疲惫→推荐休息点；正面→热情回应。
-"""
-
-        # ===== 精简情绪指令 =====
-        if emotion_info.get("has_emotion"):
-            emotion = emotion_info["emotion"]
-            if emotion == "severe_negative" or emotion_info.get("is_complaint"):
-                system_prompt += "\n→ 用户投诉，先道歉，询问原因，提供替代方案。"
-            elif emotion == "moderate_negative":
-                system_prompt += "\n→ 用户不满，共情回应，主动调整推荐方向。"
-            elif emotion == "fatigue":
-                system_prompt += "\n→ 用户疲惫，推荐休息点（灵山精舍、菩提大道、鹿鸣谷）。"
-            elif emotion == "confusion":
-                system_prompt += "\n→ 用户困惑，清晰指引，不绕弯子。"
-            elif emotion == "mild_negative":
-                system_prompt += "\n→ 用户轻微失望，轻松回应，提供替代方案。"
-            elif emotion == "strong_positive":
-                system_prompt += "\n→ 用户非常震撼，热情回应，推荐同类体验。"
-            elif emotion == "positive":
-                system_prompt += "\n→ 用户满意，自然回应，推荐类似景点。"
-            elif emotion == "mild_positive":
-                system_prompt += "\n→ 用户情绪不错，保持亲切语气。"
-            if emotion_info.get("trend_alert"):
-                system_prompt += "\n⚠️ 用户情绪持续恶化，需特别注意关怀。"
-
-        # ===== 精简用户画像 =====
-        user_profile_parts = []
-        if interest_info.get("has_interest"):
-            route_name = interest_info["route_name"]
-            spots = " → ".join(interest_info["spots"])
-            highlights = interest_info["highlights"]
-            keywords = "、".join(interest_info.get("matched_keywords", [interest_info["route_key"]]))
-
-            if is_route_question:
-                user_profile_parts.append(f"【路线】用户对「{keywords}」感兴趣。推荐「{route_name}」：{spots}。亮点：{highlights}。给停留时间和总时长。")
-            else:
-                user_profile_parts.append(f"【偏好】用户喜欢「{keywords}」。回答末尾简短提一句：需要「{route_name}」具体路线可以问我。")
-
-        if final_travel_context.get("with_children"):
-            user_profile_parts.append("【同行】带孩子，选互动性强的景点。")
-        if final_travel_context.get("with_elderly"):
-            user_profile_parts.append("【同行】有老人，选平缓易行的景点。")
-        if final_travel_context.get("time_constraint") == "half_day":
-            user_profile_parts.append("【时间】半天，控制在3-4个景点。")
-        elif final_travel_context.get("time_constraint") == "quick":
-            user_profile_parts.append("【时间】紧张，控制在2-3个景点。")
-        if final_travel_context.get("weather") == "rainy":
-            user_profile_parts.append("【天气】下雨，优先室内景点。")
-        if final_travel_context.get("energy_level") == "low":
-            user_profile_parts.append("【体力】一般，建议全程观光车。")
-
-        if user_profile_parts:
-            system_prompt += "\n\n" + "\n".join(user_profile_parts)
-
-        messages = [{"role": "system", "content": system_prompt}]
-        if history:
-            messages.extend(history[-5:])
-
-        user_message = question
-        if context:
-            user_message = f"【参考资料】\n{context}\n\n【问题】\n{question}"
-
-        messages.append({"role": "user", "content": user_message})
-
-        full_answer = ""
-        try:
-            # 使用异步客户端，真正实现异步流式
-            response = await self.async_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=512,
-                stream=True
-            )
-
-            # 使用 async for 迭代异步流
-            async for chunk in response:
-                delta = chunk.choices[0].delta
-                content = delta.content or ""
-                if content:
-                    full_answer += content
-                    cleaned_content = self._light_clean(content)
-                    yield {"type": "token", "content": cleaned_content}
-
-            full_cleaned = self._clean_answer(full_answer)
-
-            if session_data:
-                session_data["history"].append({"role": "user", "content": question})
-                session_data["history"].append({"role": "assistant", "content": full_cleaned})
-                if len(session_data["history"]) > 20:
-                    session_data["history"] = session_data["history"][-20:]
-
-            yield {"type": "done", "content": full_cleaned}
-
-        except Exception as e:
-            print(f"❌ API调用失败: {e}")
-            yield {"type": "error", "content": str(e)}
-
-    def _stream_chat_internal(self, question: str, context: str = "", session_id: str = None, history: list = None):
-        """同步流式内部实现"""
-        if not self.is_ready():
-            yield {"type": "error", "content": "LLM not ready"}
-            return
-
-        if session_id:
-            session_data = self.get_or_create_session(session_id)
-            history = session_data.get("history", [])
-            last_context = session_data.get("last_context", "")
-            stored_interests = session_data.get("interests", [])
-            stored_travel_context = session_data.get("travel_context", {})
-            print(f"[LLM] stream session: interests={stored_interests}")
-        else:
-            session_data = None
-            history = history or []
-            last_context = ""
-            stored_interests = []
-            stored_travel_context = {}
-
-        if self._is_social_question(question):
-            answer = self._generate_social_response(question, history)
-            if session_data:
-                session_data["history"].append({"role": "user", "content": question})
-                session_data["history"].append({"role": "assistant", "content": answer})
-                session_data["last_question"] = question
-            yield {"type": "token", "content": answer}
-            yield {"type": "done", "content": answer}
-            return
-
-        if not context and last_context:
-            context = last_context
-
-        emotion_info = self._detect_emotion(question)
-        if emotion_info.get("has_emotion"):
-            print(f"[LLM] stream 情绪: {emotion_info['emotion']}")
-
-        is_route_question = self._is_route_question(question)
-        interest_info = self._detect_interest(question, stored_interests)
-        print(f"[LLM] stream 兴趣: {interest_info.get('route_key') if interest_info.get('has_interest') else '无'}")
-
-        travel_context = self._extract_travel_context_from_question(question)
-
-        if interest_info.get("has_interest") and not interest_info.get("from_memory"):
-            new_interest = interest_info["route_key"]
-            if new_interest not in stored_interests:
-                stored_interests.append(new_interest)
-                if session_data:
-                    session_data["interests"] = stored_interests
-
-        if travel_context.get("has_constraint"):
-            merged_travel_context = stored_travel_context.copy()
-            if travel_context.get("with_children"):
-                merged_travel_context["with_children"] = True
-            if travel_context.get("with_elderly"):
-                merged_travel_context["with_elderly"] = True
-            if travel_context.get("time_constraint") in ["half_day", "quick"]:
-                merged_travel_context["time_constraint"] = travel_context["time_constraint"]
-            if session_data:
-                session_data["travel_context"] = merged_travel_context
-
-        final_travel_context = stored_travel_context.copy()
-        if travel_context.get("has_constraint"):
-            if travel_context.get("with_children"):
-                final_travel_context["with_children"] = True
-            if travel_context.get("with_elderly"):
-                final_travel_context["with_elderly"] = True
-            if travel_context.get("time_constraint") in ["half_day", "quick"]:
-                final_travel_context["time_constraint"] = travel_context["time_constraint"]
-
-        if context and session_data:
-            session_data["last_context"] = context
-        if session_data:
-            session_data["last_question"] = question
-
-        system_prompt = """
-你是灵山AI导游"小灵"，依据【参考资料】回答问题。
-
-【规则】
-1. 只用参考资料数据，不编造、不推测。
-2. 涉及高度/价格/时间必须引用具体数值。
-3. 问"好玩吗"→先引用事实，再建议。
-4. 用户问路线时才提供详细路线。
-5. 不用**、*、#。句号结尾。段落空行。
-
-【情绪】负面→先道歉；疲惫→推荐休息点；正面→热情回应。
-"""
-
-        if emotion_info.get("has_emotion"):
-            emotion = emotion_info["emotion"]
-            if emotion == "severe_negative" or emotion_info.get("is_complaint"):
-                system_prompt += "\n→ 用户投诉，先道歉，询问原因，提供替代方案。"
-            elif emotion == "moderate_negative":
-                system_prompt += "\n→ 用户不满，共情回应，主动调整推荐方向。"
-            elif emotion == "fatigue":
-                system_prompt += "\n→ 用户疲惫，推荐休息点（灵山精舍、菩提大道、鹿鸣谷）。"
-            elif emotion == "confusion":
-                system_prompt += "\n→ 用户困惑，清晰指引，不绕弯子。"
-            elif emotion == "mild_negative":
-                system_prompt += "\n→ 用户轻微失望，轻松回应，提供替代方案。"
-            elif emotion == "strong_positive":
-                system_prompt += "\n→ 用户非常震撼，热情回应，推荐同类体验。"
-            elif emotion == "positive":
-                system_prompt += "\n→ 用户满意，自然回应，推荐类似景点。"
-            elif emotion == "mild_positive":
-                system_prompt += "\n→ 用户情绪不错，保持亲切语气。"
-            if emotion_info.get("trend_alert"):
-                system_prompt += "\n⚠️ 用户情绪持续恶化，需特别注意关怀。"
-
-        user_profile_parts = []
-        if interest_info.get("has_interest"):
-            route_name = interest_info["route_name"]
-            spots = " → ".join(interest_info["spots"])
-            highlights = interest_info["highlights"]
-            keywords = "、".join(interest_info.get("matched_keywords", [interest_info["route_key"]]))
-
-            if is_route_question:
-                user_profile_parts.append(f"【路线】用户对「{keywords}」感兴趣。推荐「{route_name}」：{spots}。亮点：{highlights}。给停留时间和总时长。")
-            else:
-                user_profile_parts.append(f"【偏好】用户喜欢「{keywords}」。回答末尾简短提一句：需要「{route_name}」具体路线可以问我。")
-
-        if final_travel_context.get("with_children"):
-            user_profile_parts.append("【同行】带孩子，选互动性强的景点。")
-        if final_travel_context.get("with_elderly"):
-            user_profile_parts.append("【同行】有老人，选平缓易行的景点。")
-        if final_travel_context.get("time_constraint") == "half_day":
-            user_profile_parts.append("【时间】半天，控制在3-4个景点。")
-        elif final_travel_context.get("time_constraint") == "quick":
-            user_profile_parts.append("【时间】紧张，控制在2-3个景点。")
-        if final_travel_context.get("weather") == "rainy":
-            user_profile_parts.append("【天气】下雨，优先室内景点。")
-        if final_travel_context.get("energy_level") == "low":
-            user_profile_parts.append("【体力】一般，建议全程观光车。")
-
-        if user_profile_parts:
-            system_prompt += "\n\n" + "\n".join(user_profile_parts)
-
-        messages = [{"role": "system", "content": system_prompt}]
-        if history:
-            messages.extend(history[-5:])
-
-        user_message = question
-        if context:
-            user_message = f"【参考资料】\n{context}\n\n【问题】\n{question}"
-
-        messages.append({"role": "user", "content": user_message})
-
-        full_answer = ""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=512,
-                stream=True
-            )
-
-            for chunk in response:
-                delta = chunk.choices[0].delta
-                content = delta.content or ""
-                if content:
-                    full_answer += content
-                    cleaned_content = self._light_clean(content)
-                    yield {"type": "token", "content": cleaned_content}
-
-            full_cleaned = self._clean_answer(full_answer)
-
-            if session_data:
-                session_data["history"].append({"role": "user", "content": question})
-                session_data["history"].append({"role": "assistant", "content": full_cleaned})
-                if len(session_data["history"]) > 20:
-                    session_data["history"] = session_data["history"][-20:]
-
-            yield {"type": "done", "content": full_cleaned}
-
-        except Exception as e:
-            print(f"❌ API调用失败: {e}")
-            yield {"type": "error", "content": str(e)}
-
-    def _light_clean(self, text):
-        """轻量清洗，用于实时流式输出"""
-        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-        text = re.sub(r'(^|\s)\*\s+', r'\1· ', text)
-        text = re.sub(r'#', '', text)
-        return text
 
 
 _llm_service = None

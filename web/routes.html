@@ -774,6 +774,21 @@
             </div>
 
             <aside class="side-panel">
+                <div class="panel-card scenic-map-card">
+                    <div class="map-header">
+                        <div>
+                            <h3>灵山胜境导览地图</h3>
+                            <p id="mapRouteName">经典一日礼佛线</p>
+                        </div>
+                        <span class="map-pill">路线高亮</span>
+                    </div>
+                    <div class="map-canvas" id="routeMap" aria-label="路线示意地图"></div>
+                    <div class="map-legend">
+                        <span><i class="legend-dot active"></i>当前路线</span>
+                        <span><i class="legend-dot"></i>景区节点</span>
+                    </div>
+                </div>
+
                 <div class="panel-card" id="detailPanel"></div>
 
                 <div class="panel-card notice-card">
@@ -793,6 +808,21 @@
     </main>
 
     <script>
+        const scenicSpots = {
+            "入口广场": { x: 445, y: 1000, label: "入口广场" },
+            "九龙灌浴": { x: 305, y: 630, label: "九龙灌浴" },
+            "灵山大佛": { x: 205, y: 255, label: "灵山大佛" },
+            "梵宫": { x: 735, y: 505, label: "梵宫" },
+            "五印坛城": { x: 600, y: 720, label: "五印坛城" },
+            "休憩区": { x: 390, y: 470, label: "休憩区" },
+            "梵宫外景": { x: 690, y: 520, label: "梵宫外景" },
+            "佛博馆": { x: 520, y: 480, label: "佛博馆" },
+            "曼飞龙塔": { x: 880, y: 635, label: "曼飞龙塔" },
+            "湖畔观景点": { x: 465, y: 760, label: "湖畔观景点" },
+            "灵山大佛远景": { x: 120, y: 235, label: "大佛远景" },
+            "出口纪念区": { x: 610, y: 855, label: "出口纪念区" }
+        };
+
         const routes = [
             {
                 id: "classic",
@@ -807,6 +837,7 @@
                 image: "images/banner-panorama.jpg",
                 tags: ["首次到访", "核心景点", "礼佛祈福"],
                 path: ["入口广场", "灵山大佛", "九龙灌浴", "梵宫", "五印坛城"],
+                mapPath: ["入口广场", "九龙灌浴", "灵山大佛", "梵宫", "五印坛城"],
                 notes: ["大佛区域停留 45 分钟", "九龙灌浴建议卡点观看", "梵宫适合安排较长参观时间"]
             },
             {
@@ -822,6 +853,7 @@
                 image: "images/banner-jiulong.jpg",
                 tags: ["亲子友好", "节奏舒缓", "少走路"],
                 path: ["入口广场", "九龙灌浴", "灵山大佛", "休憩区", "梵宫外景"],
+                mapPath: ["入口广场", "九龙灌浴", "灵山大佛", "休憩区", "梵宫外景"],
                 notes: ["优先观看动态表演", "中途保留休息时间", "适合半日游或午后到访"]
             },
             {
@@ -837,6 +869,7 @@
                 image: "images/banner-fangong.jpg",
                 tags: ["文化展陈", "建筑艺术", "深度讲解"],
                 path: ["灵山大佛", "梵宫", "五印坛城", "佛博馆", "曼飞龙塔"],
+                mapPath: ["灵山大佛", "梵宫", "五印坛城", "佛博馆", "曼飞龙塔"],
                 notes: ["建议配合语音讲解", "梵宫与佛博馆预留充足时间", "适合上午入园慢游"]
             },
             {
@@ -852,12 +885,15 @@
                 image: "images/banner-dafo.jpg",
                 tags: ["拍照打卡", "湖景视角", "外景为主"],
                 path: ["湖畔观景点", "灵山大佛远景", "梵宫外景", "五印坛城", "出口纪念区"],
+                mapPath: ["湖畔观景点", "灵山大佛远景", "梵宫外景", "五印坛城", "出口纪念区"],
                 notes: ["晴天上午光线更清透", "湖畔适合拍摄倒影", "外景路线更适合轻装游览"]
             }
         ];
 
         const routesList = document.getElementById("routesList");
         const detailPanel = document.getElementById("detailPanel");
+        const routeMap = document.getElementById("routeMap");
+        const mapRouteName = document.getElementById("mapRouteName");
         const filterButtons = document.querySelectorAll(".filter-tabs button");
         let activeRouteId = "classic";
 
@@ -929,6 +965,65 @@
                         `).join("")}
                     </div>
                 </div>
+            `;
+            renderMap(route);
+        }
+
+        function renderMap(route) {
+            if (!routeMap) return;
+            if (mapRouteName) mapRouteName.textContent = route.title;
+
+            const activeNames = new Set(route.mapPath || route.path);
+            const allNodes = Object.entries(scenicSpots);
+            const routePoints = (route.mapPath || route.path)
+                .map(name => scenicSpots[name])
+                .filter(Boolean);
+            const routePolyline = routePoints.map(point => `${point.x},${point.y}`).join(" ");
+            const routeSegments = routePoints.slice(1).map((point, index) => {
+                const prev = routePoints[index];
+                return `
+                    <line class="map-route-glow" x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}"></line>
+                    <line class="map-route-line" x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}"></line>
+                `;
+            }).join("");
+
+            routeMap.innerHTML = `
+                <svg class="scenic-map real-map" viewBox="0 0 974 1114" role="img" aria-label="${route.title}路线地图">
+                    <defs>
+                        <linearGradient id="mapRouteGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#f1d48a"/>
+                            <stop offset="45%" stop-color="#4ba4bf"/>
+                            <stop offset="100%" stop-color="#1f6f8c"/>
+                        </linearGradient>
+                        <filter id="routeGlow" x="-40%" y="-40%" width="180%" height="180%">
+                            <feGaussianBlur stdDeviation="5" result="blur"/>
+                            <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.95 0 0 0 0 0.72 0 0 0 0 0.25 0 0 0 0.75 0"/>
+                            <feMerge>
+                                <feMergeNode/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <image href="images/lingshan-scenic-map.png" x="0" y="0" width="974" height="1114" preserveAspectRatio="xMidYMid slice"></image>
+                    <rect class="real-map-shade" x="0" y="0" width="974" height="1114"></rect>
+
+                    ${routeSegments}
+                    ${routePolyline ? `<polyline class="map-route-focus" points="${routePolyline}"></polyline>` : ""}
+
+                    ${allNodes.map(([name, point]) => {
+                        const active = activeNames.has(name);
+                        const order = (route.mapPath || route.path).indexOf(name);
+                        return `
+                            <g class="map-node ${active ? "active" : ""}" transform="translate(${point.x} ${point.y})">
+                                <circle class="node-ring" r="${active ? 16 : 11}"></circle>
+                                <circle class="node-dot" r="${active ? 7 : 5}"></circle>
+                                ${active ? `<text class="node-order" y="4">${order + 1}</text>` : ""}
+                                <text class="node-label" x="0" y="${active ? -24 : -18}">${point.label}</text>
+                            </g>
+                        `;
+                    }).join("")}
+                </svg>
             `;
         }
 
