@@ -57,9 +57,6 @@
           <el-card>
             <template #header>
               <span>游客满意度趋势（近30天）</span>
-              <span style="font-size: 12px; color: #999; margin-left: 8px;">
-                满意度 = (正面 + 0.85 × 中性) / (正面 + 中性 + 负面)
-              </span>
             </template>
             <div ref="satisfactionChart" style="height: 300px; width: 100%;"></div>
           </el-card>
@@ -80,7 +77,7 @@ import request from '@/utils/request'
 const loading = ref(true)
 const kpiList = ref([
   { icon: '👥', title: '今日服务人次', value: 0, trend: '', trendClass: '' },
-  { icon: '📅', title: '本周服务人次', value: 0, trend: '', trendClass: '' },
+  { icon: '📅', title: '近7天服务人次', value: 0, trend: '', trendClass: '' },
   { icon: '⚡', title: '平均响应延迟', value: '0 s', trend: '', trendClass: '' },
   { icon: '💬', title: '累计会话总数', value: 0, trend: '', trendClass: '' }
 ])
@@ -123,7 +120,7 @@ const loadData = async () => {
 
       kpiList.value = [
         { icon: '👥', title: '今日服务人次', value: todayCount, trend: '', trendClass: '' },
-        { icon: '📅', title: '本周服务人次', value: weekCount, trend: '', trendClass: '' },
+        { icon: '📅', title: '近7天服务人次', value: weekCount, trend: '', trendClass: '' },
         { icon: '⚡', title: '平均响应延迟', value: avgResponseTime.toFixed(1) + ' s', trend: '', trendClass: '' },
         { icon: '💬', title: '累计会话总数', value: totalConversations, trend: '', trendClass: '' }
       ]

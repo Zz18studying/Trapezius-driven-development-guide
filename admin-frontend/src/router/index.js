@@ -1,37 +1,37 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import Welcome from '@/views/Welcome.vue'
+import MainLayout from '@/layouts/MainLayout.vue'
 
 const routes = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/Login.vue')
+    path: '/admin',
+    redirect: '/admin/welcome'
   },
   {
-    path: '/',
-    component: () => import('@/layouts/MainLayout.vue'),
-    redirect: '/dashboard',
+    path: '/admin/welcome',
+    name: 'Welcome',
+    component: Welcome
+  },
+  {
+    path: '/admin',
+    component: MainLayout,
+    redirect: '/admin/dashboard',
     children: [
-      { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/Dashboard.vue') },
-      { path: 'knowledge', name: 'Knowledge', component: () => import('@/views/Knowledge.vue') },
-      { path: 'sentiment', name: 'Sentiment', component: () => import('@/views/Sentiment.vue') },
-      { path: 'dhconfig', name: 'DhConfig', component: () => import('@/views/DhConfig.vue') },
-      { path: 'conversations', name: 'Conversations', component: () => import('@/views/Conversations.vue') }
+      { path: 'dashboard', component: () => import('@/views/Dashboard.vue') },
+      { path: 'knowledge', component: () => import('@/views/Knowledge.vue') },
+      { path: 'sentiment', component: () => import('@/views/Sentiment.vue') },
+      { path: 'conversations', component: () => import('@/views/Conversations.vue') }
     ]
   }
 ]
 
 const router = createRouter({
-  history: createWebHistory('/admin/'),
+  history: createWebHistory(),
   routes
 })
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  if (to.path !== '/login' && !token) {
-    next('/login')
-  } else {
-    next()
-  }
+  next()
 })
 
 export default router
