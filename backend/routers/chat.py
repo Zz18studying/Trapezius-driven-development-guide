@@ -70,6 +70,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     use_rag: Optional[bool] = True
     n_results: Optional[int] = 3
+    verify: Optional[bool] = True
 
 
 class ChatResponse(BaseModel):
@@ -97,7 +98,7 @@ def is_fast_path_answer(sources: List[dict]) -> Optional[str]:
     top = sources[0]
     similarity = top.get('similarity', 0)
     answer = top.get('answer', '')
-    if (similarity >= 0.7 and
+    if (similarity >= 0.85 and
         "抱歉" not in answer and
         "暂无相关信息" not in answer and
         len(answer) < 350 and
@@ -107,124 +108,140 @@ def is_fast_path_answer(sources: List[dict]) -> Optional[str]:
 
 
 @router.post("/ask", response_model=ChatResponse)
-def ask(request: ChatRequest):
+async def ask(request: ChatRequest):
     """
     对话接口 - 基于知识库的问答
     """
     total_start = time.time()
     print(f"\n[API] 收到请求: {request.question[:50]}...")
     print(f"[API] session_id: {request.session_id or '新会话'}")
+    
+    try:
+        print(f"[API] verify: {request.verify}")
 
-    rag_service = get_rag_service()
-    llm_service = get_llm_service()
+        rag_service = get_rag_service()
+        llm_service = get_llm_service()
 
-    # ==================== 新增：解析指代词（必须在RAG检索之前） ====================
-    resolved_question = llm_service.resolve_pronoun(request.question, request.session_id)
-    print(f"[API] 解析后问题: {resolved_question}")
-    # ==============================================================================
+        resolved_question = llm_service.resolve_pronoun(request.question, request.session_id)
+        print(f"[API] 解析后问题: {resolved_question}")
 
-    context = ""
-    sources = []
+        context = ""
+        sources = []
 
-    if request.use_rag and rag_service.is_ready():
-        rag_start = time.time()
-        # 使用解析后的问题检索
-        search_result = rag_service.search(resolved_question, request.n_results)
-        print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
+        if request.use_rag and rag_service.is_ready():
+            rag_start = time.time()
+            search_result = rag_service.search(resolved_question, request.n_results)
+            print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
 
-        if search_result['success'] and search_result['results']:
-            sources = search_result['results'][:3]
-            # 按景点名称过滤（传入解析后的问题）
-            sources = filter_sources_by_attraction(sources, resolved_question)
-            # 手动构建 context，避免重复调用 get_context（内部会再次检索）
-            context_parts = []
-            for i, r in enumerate(sources[:request.n_results], 1):
-                context_parts.append(f"【参考{i}】\n问题：{r['question']}\n答案：{r['answer']}")
-            context = "\n\n".join(context_parts)
+            if search_result['success'] and search_result['results']:
+                sources = search_result['results'][:3]
+                sources = filter_sources_by_attraction(sources, resolved_question)
+                context_parts = []
+                for i, r in enumerate(sources[:request.n_results], 1):
+                    context_parts.append(f"【参考{i}】\n问题：{r['question']}\n答案：{r['answer']}")
+                context = "\n\n".join(context_parts)
 
-    fast_answer = is_fast_path_answer(sources)
-    if fast_answer:
-        print(f"[API] ⚡ 快速路径命中！总耗时: {time.time() - total_start:.2f}秒")
+        fast_answer = is_fast_path_answer(sources)
+        if fast_answer:
+            print(f"[API] ⚡ 快速路径命中！总耗时: {time.time() - total_start:.2f}秒")
+            sentiment = analyze_sentiment(resolved_question)
+            try:
+                sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
+                save_conversation(
+                    session_id=request.session_id or "unknown",
+                    question=resolved_question,
+                    answer=fast_answer,
+                    sources=sources_json,
+                    response_time=time.time() - total_start,
+                    sentiment=sentiment
+                )
+            except Exception as e:
+                print(f"[API] 保存对话记录失败: {e}")
+            if request.session_id:
+                session_data = llm_service.get_or_create_session(request.session_id)
+                session_data["last_question"] = resolved_question
+            return ChatResponse(
+                success=True,
+                answer=fast_answer,
+                sources=sources if sources else None,
+                error=None
+            )
+
+        if request.use_rag and not context:
+            if request.session_id:
+                session_data = llm_service.get_or_create_session(request.session_id)
+                session_data["last_question"] = resolved_question
+            return ChatResponse(
+                success=True,
+                answer="抱歉，目前知识库中暂无相关信息。",
+                sources=None,
+                error=None
+            )
+
+        llm_start = time.time()
+        
+        if request.verify:
+            print(f"[API] ✅ 启用交叉验证模式")
+            from services.safe_llm_service import get_safe_llm_service
+            safe_llm_service = get_safe_llm_service()
+            llm_result = await safe_llm_service.ask_with_verification(
+                question=resolved_question,
+                context=context,
+                session_id=request.session_id
+            )
+        else:
+            llm_result = llm_service.chat(
+                question=resolved_question,
+                context=context,
+                session_id=request.session_id
+            )
+        
+        print(f"[API] LLM调用耗时: {time.time() - llm_start:.2f}秒")
+
+        if not llm_result['success']:
+            if sources:
+                answer = sources[0].get('answer', '服务暂时不可用，请稍后再试。')
+            else:
+                answer = "服务暂时不可用，请稍后再试。"
+            return ChatResponse(
+                success=False,
+                answer=answer,
+                sources=sources if sources else None,
+                error=llm_result['error']
+            )
+
         sentiment = analyze_sentiment(resolved_question)
+        answer = llm_result['answer']
+
         try:
             sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
             save_conversation(
                 session_id=request.session_id or "unknown",
-                question=resolved_question,  # 保存解析后的问题
-                answer=fast_answer,
+                question=resolved_question,
+                answer=answer,
                 sources=sources_json,
                 response_time=time.time() - total_start,
                 sentiment=sentiment
             )
+            print("[API] 对话记录已保存")
         except Exception as e:
             print(f"[API] 保存对话记录失败: {e}")
-        # 更新会话的 last_question，以便下一轮指代
-        if request.session_id:
-            session_data = llm_service.get_or_create_session(request.session_id)
-            session_data["last_question"] = resolved_question
+
+        print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
         return ChatResponse(
             success=True,
-            answer=fast_answer,
+            answer=answer,
             sources=sources if sources else None,
             error=None
         )
-
-    if request.use_rag and not context:
-        # 即使无 context，也要保存 last_question
-        if request.session_id:
-            session_data = llm_service.get_or_create_session(request.session_id)
-            session_data["last_question"] = resolved_question
-        return ChatResponse(
-            success=True,
-            answer="抱歉，目前知识库中暂无相关信息。",
-            sources=None,
-            error=None
-        )
-
-    llm_start = time.time()
-    llm_result = llm_service.chat(
-        question=resolved_question,  # 传入解析后的问题
-        context=context,
-        session_id=request.session_id
-    )
-    print(f"[API] LLM调用耗时: {time.time() - llm_start:.2f}秒")
-
-    if not llm_result['success']:
-        if sources:
-            answer = sources[0].get('answer', '服务暂时不可用，请稍后再试。')
-        else:
-            answer = "服务暂时不可用，请稍后再试。"
+    except Exception as e:
+        print(f"[API] 异常: {e}")
         return ChatResponse(
             success=False,
-            answer=answer,
-            sources=sources if sources else None,
-            error=llm_result['error']
+            answer="服务暂时不可用，请稍后再试。",
+            sources=None,
+            error=str(e)
         )
-
-    sentiment = analyze_sentiment(resolved_question)
-    answer = llm_result['answer']
-
-    try:
-        sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
-        save_conversation(
-            session_id=request.session_id or "unknown",
-            question=resolved_question,  # 保存解析后的问题
-            answer=answer,
-            sources=sources_json,
-            response_time=time.time() - total_start,
-            sentiment=sentiment
-        )
-        print("[API] 对话记录已保存")
-    except Exception as e:
-        print(f"[API] 保存对话记录失败: {e}")
-
-    print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
-    return ChatResponse(
-        success=True,
-        answer=answer,
-        sources=sources if sources else None,
-        error=None
-    )
 
 
 @router.post("/search", response_model=SearchResponse)

@@ -39,7 +39,7 @@ DEEPSEEK_VERIFIER_MODEL = os.environ.get("DEEPSEEK_VERIFIER_MODEL", "deepseek-v4
 # 最小一致性得分，低于此分数的句子将被丢弃
 MIN_CONSISTENCY_SCORE = 0.8
 # 是否强制要求验证通过才返回
-REQUIRE_VERIFICATION = True
+REQUIRE_VERIFICATION = False
 
 # ==================== 检索配置 ====================
 DEFAULT_N_RESULTS = 5

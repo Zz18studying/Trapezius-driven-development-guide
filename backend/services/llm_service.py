@@ -50,10 +50,18 @@ class LLMService:
 
     def _is_social_question(self, question: str) -> bool:
         social_patterns = [
-            r'你好', r'您好', r'我叫', r'我是.*(?:游客|客人|朋友)',
-            r'你叫什么', r'你是谁', r'你的名字', r'我叫什么', r'我叫什么名字',
-            r'还记得我叫什么', r'知道我叫什么', r'很高兴', r'谢谢', r'感谢',
-            r'再见', r'拜拜', r'请问', r'可以.*吗', r'帮我', r'知道', r'明白'
+            r'^你好[呀么啊嘛~!！]?$',  # 只匹配纯问候
+            r'^您好[呀么啊嘛~!！]?$',
+            r'^hi', r'^hello',  # 英文问候
+            r'我叫[\u4e00-\u9fa5]{1,4}$',  # 自我介绍（不含问句）
+            r'^我是(?:游客|客人|朋友)$',  # 纯自我介绍
+            r'你叫什么名字[？?]?',  # 问机器人名字
+            r'你是谁[？?]?', r'你叫什么[？?]?', r'你的名字[？?]?',
+            r'还记得我叫什么[吗？]?', r'知道我叫什么[吗？]?',
+            r'很高兴[认识你|见到你|服务你]',  # 纯情感表达
+            r'^[谢感谢]+[你呀]?[！～]*$',  # 纯感谢
+            r'^[再见拜拜]+[～！]*$',  # 纯告别
+            r'^请问(你|你是)',  # 询问机器人身份
         ]
         for pattern in social_patterns:
             if re.search(pattern, question):
@@ -490,7 +498,8 @@ class LLMService:
 
         if context and session_data:
             session_data["last_context"] = context
-        session_data["last_question"] = original_question  # 存储原始问题，以便下一轮追踪
+        if session_data:
+            session_data["last_question"] = original_question
 
         # ===== 精简版 System Prompt =====
         system_prompt = """
@@ -502,6 +511,9 @@ class LLMService:
 3. 问"好玩吗"→先引用事实，再建议。
 4. 用户问路线时才提供详细路线。
 5. 不用**、*、#。句号结尾。段落空行。
+6. 答案必须完整，不能以"建议到"、"例如"等词结尾而不给出具体内容。
+7. 避免重复内容，同一段信息只说一次。
+8. 组织答案结构清晰，逻辑连贯，不要机械拼接。
 """
 
         # ===== 仅负面情绪指令 =====
@@ -564,7 +576,7 @@ class LLMService:
                 model=self.model,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=384
+                max_tokens=768
             )
             answer = response.choices[0].message.content
             answer = self._clean_answer(answer)
@@ -587,6 +599,17 @@ class LLMService:
         answer = re.sub(r'\n{3,}', '\n', answer)
         answer = re.sub(r'([。！？])(?!\n)', r'\1\n', answer)
         answer = re.sub(r'\n{2,}', '\n\n', answer)
+        
+        sentences = answer.split('\n')
+        seen = set()
+        deduped = []
+        for s in sentences:
+            s_clean = s.strip()
+            if s_clean and s_clean not in seen:
+                seen.add(s_clean)
+                deduped.append(s_clean)
+        answer = '\n\n'.join(deduped)
+        
         return answer.strip()
 
     def clear_session(self, session_id: str):

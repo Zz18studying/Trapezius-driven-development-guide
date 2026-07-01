@@ -75,11 +75,25 @@ class RAGService:
     def is_ready(self):
         return self.collection is not None
 
+    ATTRACTION_NAMES = [
+        "灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城", "祥符禅寺",
+        "拈花广场", "梵天花海", "香月花街", "五灯湖", "灵山大照壁",
+        "阿育王柱", "百子戏弥勒", "曼飞龙塔", "无尽意斋", "鹿鸣谷",
+        "灵山精舍", "菩提大道", "五明桥", "佛足坛", "五智门",
+        "降魔浮雕", "佛教文化博览馆"
+    ]
+
+    def _extract_attraction_name(self, query: str) -> str:
+        """从问题中提取景点名称（仅匹配已知景点）"""
+        for name in self.ATTRACTION_NAMES:
+            if name in query:
+                return name
+        return ""
+
     def _expand_question(self, query: str) -> list:
         """扩展问题为多个变体"""
         queries = [query]
-        name_match = re.search(r'([\u4e00-\u9fa5]{2,6})(.*)', query)
-        name = name_match.group(1) if name_match else None
+        name = self._extract_attraction_name(query)
         
         if name:
             if '有什么特色' in query or '有什么看点' in query:
@@ -97,8 +111,8 @@ class RAGService:
                 queries.append(query.replace('怎么去', '怎么走'))
             if '几点' in query or '开放时间' in query:
                 queries.append(f"{name}开放时间")
-            if '门票' in query or '价格' in query:
-                queries.append('门票价格')
+            if '门票' in query:
+                queries.append(f"{name}门票价格")
         if '吗' in query:
             queries.append(query.replace('吗', ''))
         

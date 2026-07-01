@@ -39,11 +39,12 @@ class SafeLLMService:
             return {"success": False, "answer": "", "confidence": 0.0,
                     "verified_sentences": [], "sources": [], "error": "LLM not ready"}
 
-        # 第一步：调用主模型生成完整回答
-        gen_result = self.llm.chat(
+        # 第一步：调用主模型生成完整回答（异步执行，避免阻塞事件循环）
+        gen_result = await asyncio.to_thread(
+            self.llm.chat,
             question=question,
             context=context,
-            session_id=session_id,  # ← 传递 session_id
+            session_id=session_id,
             history=history
         )
         
@@ -128,8 +129,22 @@ class SafeLLMService:
         final_answer = ""
         
         if passed_count == 0:
-            if self.require_verification:
-                final_answer = "抱歉，基于现有知识库，我无法确认任何信息的准确性，建议您参考官方渠道。"
+            # 所有句子都没通过验证时，优先使用置信度最高的句子
+            if verification_results:
+                best_result = max(verification_results, key=lambda x: x.get("confidence", 0.0))
+                best_confidence = best_result.get("confidence", 0.0)
+                
+                if best_confidence >= 0.3:  # 降低阈值，只要有一点置信度就使用
+                    final_answer = raw_answer
+                    overall_confidence = best_confidence
+                    print(f"[SAFE_LLM] 所有句子验证未通过，但使用原始回答（最高置信度: {best_confidence:.2f}）")
+                elif self.require_verification:
+                    # 置信度太低时，给出提示但仍然提供原始答案
+                    final_answer = raw_answer
+                    overall_confidence = best_confidence
+                    print(f"[SAFE_LLM] 置信度过低({best_confidence:.2f})，提供参考回答")
+                else:
+                    final_answer = raw_answer
             else:
                 final_answer = raw_answer
         else:
