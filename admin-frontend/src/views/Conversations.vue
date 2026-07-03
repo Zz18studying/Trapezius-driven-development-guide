@@ -24,7 +24,7 @@
         <el-col :span="7">
           <el-input
             v-model="searchSessionId"
-            placeholder="搜索会话ID（支持部分匹配）"
+            placeholder="搜索会话ID，如 lingshan_20260703_0001"
             clearable
             @keyup.enter="handleSearch"
           />
@@ -36,7 +36,7 @@
         </el-col>
       </el-row>
       <div style="margin-top: 10px; font-size: 13px; color: #999;">
-        💡 共 {{ total }} 个会话，点击卡片查看完整对话
+        💡 共 {{ total }} 个会话，ID 格式为 lingshan_YYYYMMDD_XXXX，点击卡片查看完整对话
       </div>
     </el-card>
 

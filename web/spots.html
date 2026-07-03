@@ -761,6 +761,64 @@
         }];
 
         let expandedId = null;
+        const SPOT_REVIEWS_KEY = 'lingshan_spot_reviews';
+        let ratingSummaries = {};
+        let ratingsLoadedFromApi = false;
+
+        function readSpotReviews() {
+            try {
+                return JSON.parse(localStorage.getItem(SPOT_REVIEWS_KEY) || '{}') || {};
+            } catch (err) {
+                console.warn('Failed to read spot reviews:', err);
+                return {};
+            }
+        }
+
+        function getSpotReviews(spotId) {
+            const reviews = readSpotReviews();
+            return Array.isArray(reviews[String(spotId)]) ? reviews[String(spotId)] : [];
+        }
+
+        function getSpotRatingSummary(spotId) {
+            const cached = ratingSummaries[String(spotId)];
+            if (cached) {
+                return {
+                    count: Number(cached.count) || 0,
+                    average: Number(cached.average) || 0
+                };
+            }
+            if (ratingsLoadedFromApi) {
+                return { count: 0, average: 0 };
+            }
+
+            const ratings = getSpotReviews(spotId)
+                .map(review => Number(review.rating))
+                .filter(rating => Number.isFinite(rating) && rating >= 1 && rating <= 5);
+
+            if (ratings.length === 0) {
+                return { count: 0, average: 0 };
+            }
+
+            const total = ratings.reduce((sum, rating) => sum + rating, 0);
+            return { count: ratings.length, average: total / ratings.length };
+        }
+
+        function formatSpotRating(summary) {
+            return summary.count > 0 ? summary.average.toFixed(1) : '暂无评分';
+        }
+
+        async function loadSpotRatings() {
+            try {
+                const res = await fetch('/api/spots/ratings');
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    ratingSummaries = data.data;
+                    ratingsLoadedFromApi = true;
+                }
+            } catch (err) {
+                console.warn('Spot rating API unavailable, using local reviews:', err);
+            }
+        }
 
         // ============================================================
         // 渲染卡片
@@ -769,6 +827,8 @@
             const container = document.getElementById('cardsContainer');
             container.innerHTML = '';
             data.forEach(spot => {
+                const ratingSummary = getSpotRatingSummary(spot.id);
+                const ratingText = formatSpotRating(ratingSummary);
                 const card = document.createElement('div');
                 card.className = 'spot-card';
                 card.dataset.id = spot.id;
@@ -779,7 +839,7 @@
                                 <div class="card-header">
                                     <span class="icon">${spot.icon}</span>
                                     <span class="name">${spot.name}</span>
-                                    <span class="rating">评分 ${spot.rating}</span>
+                                    <span class="rating">评分 ${ratingText}</span>
                                 </div>
                                 <div class="card-tags">
                                     ${spot.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
@@ -878,7 +938,7 @@
         // ============================================================
         // 初始化
         // ============================================================
-        renderSpots(spotsData);
+        loadSpotRatings().finally(() => renderSpots(spotsData));
         console.log('立体悬浮景点列表加载成功');
     </script>
 

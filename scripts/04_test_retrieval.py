@@ -1,259 +1,200 @@
 # -*- coding: utf-8 -*-
 """
-测试向量数据库检索功能
-独立测试脚本，用于验证检索效果
-
-使用方式：
-    python scripts/04_test_retrieval.py
-    python scripts/04_test_retrieval.py --question "灵山大佛有多高？"
-    python scripts/04_test_retrieval.py --interactive
+测试向量数据库检索效果。
 """
 
+import argparse
 import os
 import sys
-import argparse
 import chromadb
+from chromadb.utils import embedding_functions
 
-# ==================== 路径配置 ====================
-# 获取脚本所在目录和项目根目录
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-
-# 向量数据库路径
+BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 CHROMA_DB_PATH = os.path.join(PROJECT_ROOT, "backend", "chroma_db")
 COLLECTION_NAME = "lingshan_faq"
+LOCAL_MODEL_CANDIDATES = [
+    "/home/ubuntu/.cache/sentence-transformers/local_model",
+    os.path.join(os.path.expanduser("~"), ".cache", "sentence-transformers", "local_model"),
+]
+
+sys.path.insert(0, BACKEND_DIR)
+from services.local_embedding import SimpleChineseEmbeddingFunction
+from services.retrieval_ranker import detect_intents, rerank_candidates
 
 
-# ==================== 连接数据库 ====================
+def get_embedding_function():
+    for model_path in LOCAL_MODEL_CANDIDATES:
+        if os.path.exists(model_path):
+            return embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_path)
+    return SimpleChineseEmbeddingFunction()
+
+
 def get_collection():
-    """获取向量数据库集合"""
     if not os.path.exists(CHROMA_DB_PATH):
-        print(f"❌ 向量数据库不存在: {CHROMA_DB_PATH}")
-        print("   请先运行 scripts/03_build_vector_db.py 构建数据库")
+        print(f"向量数据库不存在: {CHROMA_DB_PATH}")
+        print("请先运行 scripts/03_build_vector_db.py")
         return None
 
     client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-
+    embedding_fn = get_embedding_function()
     try:
-        collection = client.get_collection(COLLECTION_NAME)
-        print(f"✅ 已连接到向量数据库")
-        print(f"   数据库路径: {CHROMA_DB_PATH}")
-        print(f"   集合名称: {COLLECTION_NAME}")
-        return collection
+        collection = client.get_collection(COLLECTION_NAME, embedding_function=embedding_fn)
     except Exception as e:
-        print(f"❌ 无法获取集合: {e}")
+        print(f"无法获取集合: {e}")
         return None
 
-
-# ==================== 单问题测试 ====================
-def test_single_question(collection, question, n_results=5):
-    """测试单个问题"""
-    print(f"\n{'='*60}")
-    print(f"❓ 问题: {question}")
-    print(f"{'='*60}")
-
-    results = collection.query(
-        query_texts=[question],
-        n_results=n_results
-    )
-
-    if results['documents'] and results['documents'][0]:
-        print(f"\n📚 检索结果 (共 {len(results['documents'][0])} 条):")
-        print("-" * 50)
-
-        for i, (doc, metadata, distance) in enumerate(zip(
-            results['documents'][0],
-            results['metadatas'][0],
-            results['distances'][0]
-        )):
-            similarity = 1 - distance
-            # 根据相似度设置标记
-            if similarity > 0.8:
-                flag = "✅ 高相关"
-            elif similarity > 0.6:
-                flag = "📌 中相关"
-            else:
-                flag = "⚠️ 低相关"
-
-            print(f"\n   [{i+1}] {flag} | 相似度: {similarity:.4f}")
-            print(f"       类别: {metadata.get('category', '未知')}")
-            print(f"       问题: {metadata.get('question', '')}")
-            print(f"       答案: {metadata.get('answer', '')[:80]}...")
-
-        return results
-    else:
-        print("   ❌ 未找到相关结果")
-        return None
+    print("已连接向量数据库")
+    print(f"数据库路径: {CHROMA_DB_PATH}")
+    print(f"集合名称: {COLLECTION_NAME}")
+    print(f"条目数: {collection.count()}")
+    return collection
 
 
-# ==================== 批量测试 ====================
-def test_batch(collection, questions, n_results=3):
-    """批量测试多个问题"""
+def expand_question(question: str) -> list:
+    queries = [question]
+    intents = detect_intents(question)
+    if "price" in intents:
+        queries.extend(["灵山胜境门票多少钱", "票务价格 成人票 半价票 免票 观光车"])
+    if "parent" in intents:
+        queries.extend(["亲子游怎么玩", "亲子家庭路线 孩子 儿童"])
+    if "rain" in intents:
+        queries.extend(["雨天适合去哪", "室内景点 馆内 展厅"])
+    if "elder" in intents:
+        queries.extend(["老人游怎么玩", "观光车 体力有限 老人"])
+    if "quick" in intents:
+        queries.extend(["半天怎么玩", "快速游 轻松游 路线规划"])
+
+    result = []
+    seen = set()
+    for query in queries:
+        query = query.strip()
+        if query and query not in seen:
+            seen.add(query)
+            result.append(query)
+    return result
+
+
+def query_candidates(collection, question: str, n_results: int) -> list:
+    candidates = []
+    for query in expand_question(question):
+        result = collection.query(query_texts=[query], n_results=max(n_results * 12, 50))
+        docs = result.get("documents", [[]])[0] or []
+        metadatas = result.get("metadatas", [[]])[0] or []
+        distances = result.get("distances", [[]])[0] or []
+        candidates.extend(make_candidates(metadatas, distances, docs))
+    return candidates
+
+
+def test_single_question(collection, question: str, n_results: int = 5):
     print("\n" + "=" * 70)
-    print("📋 批量测试")
+    print(f"问题: {question}")
     print("=" * 70)
 
-    results_summary = []
+    candidates = query_candidates(collection, question, n_results)
+    if not candidates:
+        print("未找到结果")
+        return None
 
-    for i, question in enumerate(questions, 1):
-        print(f"\n[{i}/{len(questions)}] ❓ {question}")
+    reranked = rerank_candidates(candidates, question)[:n_results]
 
-        results = collection.query(
-            query_texts=[question],
-            n_results=n_results
-        )
-
-        if results['documents'] and results['documents'][0]:
-            top_result = results['documents'][0][0]
-            top_metadata = results['metadatas'][0][0]
-            top_distance = results['distances'][0][0]
-            similarity = 1 - top_distance
-
-            results_summary.append({
-                "question": question,
-                "found": True,
-                "top_question": top_metadata.get('question', ''),
-                "top_answer": top_metadata.get('answer', '')[:60],
-                "similarity": similarity
-            })
-
-            print(f"   ✅ 找到: {top_metadata.get('question', '')[:50]}... (相似度: {similarity:.3f})")
-        else:
-            results_summary.append({
-                "question": question,
-                "found": False,
-                "top_question": "",
-                "top_answer": "",
-                "similarity": 0
-            })
-            print(f"   ❌ 未找到相关结果")
-
-    return results_summary
+    for index, item in enumerate(reranked, 1):
+        print(f"\n[{index}] 总分: {item.get('final_score', 0):.3f} | 向量: {item.get('vector_similarity', 0):.3f}")
+        print(f"类型: {item.get('type', '')} / {item.get('category', '')}")
+        print(f"问题: {item.get('question', '')}")
+        answer = item.get("answer", "")
+        print(f"答案: {answer[:180]}{'...' if len(answer) > 180 else ''}")
+        if item.get("source"):
+            print(f"来源: {item.get('source')}")
+    return reranked
 
 
-# ==================== 交互式测试 ====================
-def interactive_test(collection):
-    """交互式测试，用户可以连续输入问题"""
-    print("\n" + "=" * 60)
-    print("🎤 交互式测试模式")
-    print("=" * 60)
-    print("输入问题进行检索，输入 'quit' 或 'exit' 退出")
-    print("-" * 60)
-
-    while True:
-        question = input("\n❓ 请输入问题: ").strip()
-
-        if question.lower() in ['quit', 'exit', 'q']:
-            print("👋 退出测试")
-            break
-
-        if not question:
+def test_batch(collection, questions: list, n_results: int = 3):
+    summary = []
+    for question in questions:
+        candidates = query_candidates(collection, question, n_results)
+        if not candidates:
+            summary.append((question, False, 0, ""))
+            print(f"未命中: {question}")
             continue
-
-        test_single_question(collection, question, n_results=3)
-
-
-# ==================== 统计信息 ====================
-def print_collection_info(collection):
-    """打印集合统计信息"""
-    try:
-        count = collection.count()
-        print(f"\n📊 集合统计:")
-        print(f"   总条目数: {count}")
-    except:
-        pass
+        top = rerank_candidates(candidates, question)[0]
+        score = top.get("final_score", 0)
+        top_question = top.get("question", "")
+        summary.append((question, True, score, top_question))
+        print(f"命中: {question} -> {top_question[:45]} (总分 {score:.3f})")
+    return summary
 
 
-# ==================== 主函数 ====================
+def make_candidates(metadatas: list, distances: list, docs: list) -> list:
+    candidates = []
+    for metadata, distance, doc in zip(metadatas, distances, docs):
+        candidates.append({
+            "type": metadata.get("type", ""),
+            "question": metadata.get("question", ""),
+            "answer": metadata.get("answer", ""),
+            "category": metadata.get("category", ""),
+            "attraction_name": metadata.get("attraction_name", ""),
+            "source": metadata.get("source", ""),
+            "source_type": metadata.get("source_type", ""),
+            "vector_similarity": 1 - distance,
+            "doc": doc,
+        })
+    return candidates
+
+
+def interactive(collection):
+    print("进入交互检索，输入 exit 退出。")
+    while True:
+        question = input("\n请输入问题: ").strip()
+        if question.lower() in {"exit", "quit", "q"}:
+            break
+        if question:
+            test_single_question(collection, question, 5)
+
+
 def main():
-    parser = argparse.ArgumentParser(description='测试向量数据库检索')
-    parser.add_argument('-q', '--question', type=str, help='单个测试问题')
-    parser.add_argument('-i', '--interactive', action='store_true', help='交互式测试模式')
-    parser.add_argument('-n', '--n_results', type=int, default=5, help='返回结果数量（默认5）')
-    parser.add_argument('--batch', action='store_true', help='批量测试预设问题')
-
+    parser = argparse.ArgumentParser(description="测试灵山胜境向量检索")
+    parser.add_argument("-q", "--question", help="单个问题")
+    parser.add_argument("-n", "--n_results", type=int, default=5)
+    parser.add_argument("-i", "--interactive", action="store_true")
+    parser.add_argument("--batch", action="store_true")
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("灵山胜境 - 向量检索测试工具")
-    print("=" * 60)
-
-    # 连接数据库
     collection = get_collection()
     if collection is None:
         sys.exit(1)
 
-    print_collection_info(collection)
-
-    # 预设的批量测试问题
-    BATCH_QUESTIONS = [
+    batch_questions = [
         "灵山大佛有多高？",
         "九龙灌浴几点开始？",
         "门票多少钱？",
-        "怎么去灵山胜境？",
-        "有轮椅出租吗？",
-        "祥符禅寺建于什么时候？",
+        "祥符禅寺有什么历史？",
         "梵宫有什么看点？",
-        "适合带孩子去吗？",
         "五印坛城是什么风格？",
-        "可以抱佛脚吗？",
-        "景区有洗手间吗？",
-        "灵山精舍怎么预定？",
+        "带孩子怎么玩？",
+        "雨天适合去哪？",
+        "拈花广场有什么特色？",
+        "香月花街可以做什么？",
         "曼飞龙塔在哪里？",
-        "无尽意斋是什么地方？",
-        "菩提大道有什么特色？",
-        "百子戏弥勒有什么寓意？",
+        "菩提大道有什么文化寓意？",
     ]
 
-    # 根据参数选择测试模式
     if args.question:
-        # 单问题模式
         test_single_question(collection, args.question, args.n_results)
-
     elif args.interactive:
-        # 交互式模式
-        interactive_test(collection)
-
-    elif args.batch:
-        # 批量模式
-        results = test_batch(collection, BATCH_QUESTIONS, n_results=3)
-
-        # 打印统计
-        print("\n" + "=" * 70)
-        print("📊 批量测试统计")
-        print("=" * 70)
-
-        success_count = sum(1 for r in results if r['found'])
-        total = len(results)
-        print(f"   成功率: {success_count}/{total} ({success_count/total*100:.1f}%)")
-
-        print("\n📋 详细结果:")
-        for r in results:
-            status = "✅" if r['found'] else "❌"
-            print(f"   {status} {r['question']}")
-            if r['found']:
-                print(f"      → {r['top_answer']}...")
-
+        interactive(collection)
     else:
-        # 默认：运行批量测试
-        results = test_batch(collection, BATCH_QUESTIONS, n_results=3)
-
+        summary = test_batch(collection, batch_questions, 3)
+        found = sum(1 for _, ok, _, _ in summary if ok)
         print("\n" + "=" * 70)
-        print("📊 批量测试统计")
-        print("=" * 70)
-
-        success_count = sum(1 for r in results if r['found'])
-        total = len(results)
-        print(f"   成功率: {success_count}/{total} ({success_count/total*100:.1f}%)")
-
-        # 显示低相似度的问题（需要改进的）
-        low_quality = [r for r in results if r['found'] and r['similarity'] < 0.6]
-        if low_quality:
-            print(f"\n⚠️ 相似度较低的问题 ({len(low_quality)}个，需要优化):")
-            for r in low_quality:
-                print(f"   • {r['question']} (相似度: {r['similarity']:.3f})")
-
-    print("\n✨ 测试完成")
+        print(f"批量测试完成: {found}/{len(summary)} 命中")
+        low = [(q, sim) for q, ok, sim, _ in summary if ok and sim < 0.35]
+        if low:
+            print("低相似度问题:")
+            for question, similarity in low:
+                print(f"  {question}: {similarity:.3f}")
 
 
 if __name__ == "__main__":

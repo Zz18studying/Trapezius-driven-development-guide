@@ -1,148 +1,160 @@
 # -*- coding: utf-8 -*-
 """
-构建向量数据库 - 使用本地嵌入模型
+构建向量数据库。
+
+同时索引 FAQ 和原文知识块，保证口语问题与原文知识都可被检索到。
 """
 
 import json
 import os
+import sys
 import time
 import chromadb
 from chromadb.utils import embedding_functions
 
-# ==================== 路径配置 ====================
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 CHROMA_DB_PATH = os.path.join(BACKEND_DIR, "chroma_db")
-INPUT_FILE = os.path.join(DATA_PROCESSED, "faq_final.json")
-
-# 本地模型路径
-LOCAL_MODEL_PATH = "/home/ubuntu/.cache/sentence-transformers/local_model"
-
-# 确保目录存在
-os.makedirs(BACKEND_DIR, exist_ok=True)
-os.makedirs(CHROMA_DB_PATH, exist_ok=True)
-
-# 集合名称
+FAQ_FILE = os.path.join(DATA_PROCESSED, "faq_final.json")
+KNOWLEDGE_FILE = os.path.join(DATA_PROCESSED, "knowledge_units.json")
 COLLECTION_NAME = "lingshan_faq"
 
-print("=" * 60)
-print("灵山胜境 - 向量数据库构建")
-print("=" * 60)
+LOCAL_MODEL_CANDIDATES = [
+    "/home/ubuntu/.cache/sentence-transformers/local_model",
+    os.path.join(os.path.expanduser("~"), ".cache", "sentence-transformers", "local_model"),
+]
 
-# 检查模型是否存在
-if not os.path.exists(LOCAL_MODEL_PATH):
-    print(f"❌ 本地模型不存在: {LOCAL_MODEL_PATH}")
-    print("   请先下载模型到该路径")
-    exit(1)
-
-print(f"✅ 使用本地模型: {LOCAL_MODEL_PATH}")
-
-# 使用本地嵌入模型
-embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-    model_name=LOCAL_MODEL_PATH
-)
-
-# 初始化 Chroma 客户端
-chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-
-# 删除旧集合
-try:
-    chroma_client.delete_collection(COLLECTION_NAME)
-    print("🔄 已删除旧的知识库")
-except:
-    pass
-
-# 创建新集合
-collection = chroma_client.create_collection(
-    name=COLLECTION_NAME,
-    embedding_function=embedding_fn
-)
-
-print("✅ 已创建向量数据库集合")
-print(f"   数据库路径: {CHROMA_DB_PATH}")
+sys.path.insert(0, BACKEND_DIR)
+from services.local_embedding import SimpleChineseEmbeddingFunction
 
 
-def load_faq_data(file_path):
-    """加载FAQ数据"""
-    with open(file_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    if isinstance(data, list):
-        return data
-    elif isinstance(data, dict):
-        if "faq" in data:
-            return data["faq"]
-        else:
-            return []
-    else:
-        return []
+def load_json(path: str):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"文件不存在: {path}")
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-def build_vector_store(faq_list):
-    """将FAQ存入向量数据库"""
-    documents = []
-    metadatas = []
-    ids = []
+def get_embedding_function():
+    for model_path in LOCAL_MODEL_CANDIDATES:
+        if os.path.exists(model_path):
+            print(f"使用本地嵌入模型: {model_path}")
+            return embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_path)
 
-    for i, faq in enumerate(faq_list):
+    print("未找到本地 sentence-transformers 模型，使用离线中文 n-gram 向量兜底。")
+    print("服务器部署时如果已有 /home/ubuntu/.cache/sentence-transformers/local_model，会自动优先使用。")
+    return SimpleChineseEmbeddingFunction()
+
+
+def load_faq_records() -> list:
+    data = load_json(FAQ_FILE)
+    faq_list = data.get("faq", data if isinstance(data, list) else [])
+    records = []
+    for index, faq in enumerate(faq_list, 1):
         question = faq.get("question", "")
         answer = faq.get("answer", "")
-        category = faq.get("category", "通用")
-
-        doc_text = f"问题：{question}\n答案：{answer}"
-
-        documents.append(doc_text)
-        metadatas.append({
-             "type": "faq", 
-            "question": question,
-            "answer": answer,
-            "category": category,
-            "index": i
+        if not question or not answer:
+            continue
+        records.append({
+            "id": faq.get("id") or f"faq_{index:04d}",
+            "document": f"问题：{question}\n答案：{answer}",
+            "metadata": {
+                "type": "faq",
+                "question": question,
+                "answer": answer,
+                "category": faq.get("category", "通用知识"),
+                "source": faq.get("source", ""),
+                "source_type": faq.get("source_type", ""),
+                "source_attraction": faq.get("source_attraction", ""),
+                "attraction_name": faq.get("attraction_name", ""),
+            }
         })
-        ids.append(f"faq_{i:04d}")
+    return records
 
-    batch_size = 100
-    total = len(documents)
 
-    print(f"\n💾 正在存入向量数据库（共{total}条）...")
+def load_knowledge_records() -> list:
+    units = load_json(KNOWLEDGE_FILE)
+    records = []
+    for index, unit in enumerate(units, 1):
+        title = unit.get("title", "")
+        content = unit.get("content", "")
+        if not content:
+            continue
+        question = title if title.endswith(("？", "?")) else f"{title}是什么？"
+        answer = content
+        records.append({
+            "id": unit.get("id") or f"ku_{index:04d}",
+            "document": f"标题：{title}\n内容：{content}",
+            "metadata": {
+                "type": "knowledge",
+                "question": question,
+                "answer": answer,
+                "category": unit.get("category", "通用知识"),
+                "source": unit.get("source_file", ""),
+                "source_type": unit.get("source_type", ""),
+                "source_attraction": unit.get("source_attraction", ""),
+                "attraction_name": unit.get("attraction_name", ""),
+            }
+        })
+    return records
 
+
+def recreate_collection(client, embedding_fn):
+    try:
+        client.delete_collection(COLLECTION_NAME)
+        print("已删除旧知识库集合。")
+    except Exception:
+        pass
+
+    collection = client.create_collection(
+        name=COLLECTION_NAME,
+        embedding_function=embedding_fn
+    )
+    print(f"已创建集合: {COLLECTION_NAME}")
+    return collection
+
+
+def add_records(collection, records: list, batch_size: int = 100):
+    total = len(records)
     for start in range(0, total, batch_size):
-        end = min(start + batch_size, total)
+        batch = records[start:start + batch_size]
         collection.add(
-            documents=documents[start:end],
-            metadatas=metadatas[start:end],
-            ids=ids[start:end]
+            ids=[item["id"] for item in batch],
+            documents=[item["document"] for item in batch],
+            metadatas=[item["metadata"] for item in batch],
         )
-        print(f"   已存入 {end}/{total} 条")
-
-    print(f"\n✅ 成功存入 {total} 条知识")
-    return total
+        print(f"已写入 {min(start + batch_size, total)}/{total}")
 
 
 def main():
-    if not os.path.exists(INPUT_FILE):
-        print(f"\n❌ 文件不存在: {INPUT_FILE}")
-        print("   请先运行 scripts/02_generate_faq.py 生成FAQ数据")
-        return
+    print("=" * 70)
+    print("灵山胜境向量数据库构建")
+    print("=" * 70)
+    os.makedirs(CHROMA_DB_PATH, exist_ok=True)
 
-    print(f"\n📖 加载FAQ数据: {INPUT_FILE}")
-    faq_list = load_faq_data(INPUT_FILE)
-    print(f"   共 {len(faq_list)} 条FAQ")
+    faq_records = load_faq_records()
+    knowledge_records = load_knowledge_records()
+    records = faq_records + knowledge_records
 
-    if len(faq_list) == 0:
-        print("❌ 没有加载到FAQ数据")
-        return
+    print(f"FAQ 记录: {len(faq_records)}")
+    print(f"原文知识块: {len(knowledge_records)}")
+    print(f"总入库记录: {len(records)}")
+    if not records:
+        raise RuntimeError("没有可入库数据，请先运行 01 和 02 脚本。")
 
-    start_time = time.time()
-    total = build_vector_store(faq_list)
-    elapsed = time.time() - start_time
+    start = time.time()
+    embedding_fn = get_embedding_function()
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+    collection = recreate_collection(client, embedding_fn)
+    add_records(collection, records)
 
-    print(f"\n⏱️ 构建耗时: {elapsed:.1f} 秒")
-    print(f"📊 平均速度: {total / elapsed:.1f} 条/秒")
-
-    print("\n✨ 向量数据库构建完成！")
+    elapsed = time.time() - start
+    print(f"构建完成，集合条目数: {collection.count()}")
+    print(f"数据库路径: {CHROMA_DB_PATH}")
+    print(f"耗时: {elapsed:.1f} 秒")
 
 
 if __name__ == "__main__":

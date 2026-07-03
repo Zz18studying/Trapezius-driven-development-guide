@@ -488,28 +488,49 @@
 
     <script>
         // ============================================================
-        // 1. 会话管理（后端分配）
+        // 1. 会话管理（后端统一分配）
         // ============================================================
-        async function initSessionFromServer() {
-            try {
-                const response = await fetch('/api/chat/session/init');
-                const data = await response.json();
-                if (data.code === 0) {
-                    return data.data.session_id;
-                }
-                throw new Error(data.msg || '分配会话ID失败');
-            } catch (err) {
-                console.error('获取会话ID失败:', err);
-                const now = new Date();
-                const dateStr = now.getFullYear() +
-                    String(now.getMonth() + 1).padStart(2, '0') +
-                    String(now.getDate()).padStart(2, '0');
-                const fallbackSeq = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-                return `lingshan_${dateStr}_${fallbackSeq}`;
+        const CHAT_HISTORY_KEY = 'lingshan_chat_sessions';
+        const DEVICE_ID_KEY = 'lingshan_device_id';
+        const DEFAULT_GREETING = '您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？';
+
+        function createDeviceId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return `device_${window.crypto.randomUUID()}`;
             }
+            const randomPart = Math.random().toString(36).slice(2, 12);
+            return `device_${Date.now().toString(36)}_${randomPart}`;
+        }
+
+        function getOrCreateDeviceId() {
+            let id = localStorage.getItem(DEVICE_ID_KEY);
+            if (!id) {
+                id = createDeviceId();
+                localStorage.setItem(DEVICE_ID_KEY, id);
+            }
+            return id;
+        }
+
+        const deviceId = getOrCreateDeviceId();
+
+        async function initSessionFromServer() {
+            const response = await fetch(`/api/chat/session/init?device_id=${encodeURIComponent(deviceId)}`);
+            const data = await response.json();
+            if (data.code === 0 && data.data && data.data.session_id) {
+                return data.data.session_id;
+            }
+            throw new Error(data.msg || '分配会话ID失败');
+        }
+
+        function isValidSessionId(id) {
+            return /^lingshan_\d{8}_\d{4}$/.test(id || '');
         }
 
         let sessionId = localStorage.getItem('sessionId');
+        if (sessionId && !isValidSessionId(sessionId)) {
+            localStorage.removeItem('sessionId');
+            sessionId = null;
+        }
         if (sessionId) {
             document.getElementById('sessionDisplay').textContent = sessionId;
         } else {
@@ -536,7 +557,7 @@
         // ============================================================
         // 3. 对话辅助函数
         // ============================================================
-        function addMessage(content, role) {
+        function addMessage(content, role, timeText) {
             const div = document.createElement('div');
             div.className = `message ${role}`;
 
@@ -561,7 +582,7 @@
                 `;
             }
 
-            const time = new Date().toLocaleTimeString();
+            const time = timeText || new Date().toLocaleTimeString();
             div.innerHTML = `
                 ${avatarHTML}
                 <div class="message-content">
@@ -586,6 +607,75 @@
 
         function getTimeString() {
             return new Date().toLocaleTimeString();
+        }
+
+        function formatMessageTime(timestamp) {
+            const date = new Date(Number(timestamp));
+            if (Number.isNaN(date.getTime())) return '刚刚';
+            return date.toLocaleTimeString();
+        }
+
+        function readChatSessions() {
+            try {
+                return JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '{}') || {};
+            } catch (err) {
+                return {};
+            }
+        }
+
+        function writeChatSessions(sessions) {
+            localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(sessions));
+        }
+
+        function saveChatMessage(role, content) {
+            if (!sessionId || !content) return;
+            const sessions = readChatSessions();
+            const current = sessions[sessionId] || {
+                sessionId,
+                messages: [],
+                createdAt: Date.now()
+            };
+
+            current.messages.push({
+                role,
+                content: String(content).slice(0, 1200),
+                time: Date.now()
+            });
+            current.messages = current.messages.slice(-60);
+            current.updatedAt = Date.now();
+            sessions[sessionId] = current;
+            writeChatSessions(sessions);
+        }
+
+        function ensureEmptyChatSession(id) {
+            if (!id) return;
+            const sessions = readChatSessions();
+            sessions[id] = {
+                sessionId: id,
+                messages: [],
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+            writeChatSessions(sessions);
+        }
+
+        function loadChatHistory() {
+            if (!sessionId) return;
+
+            const sessions = readChatSessions();
+            const current = sessions[sessionId];
+            const messages = current && Array.isArray(current.messages)
+                ? current.messages
+                : [];
+
+            if (messages.length === 0) return;
+
+            chatMessages.innerHTML = '';
+            messages.forEach((message) => {
+                if (!message || !message.content || !message.role) return;
+                addMessage(message.content, message.role, formatMessageTime(message.time));
+            });
+            scrollToBottom();
         }
 
         // ============================================================
@@ -622,6 +712,7 @@
                 </div>
             `;
             chatMessages.appendChild(userDiv);
+            saveChatMessage('user', question);
             scrollToBottom();
 
             // 创建助手消息气泡（使用唯一ID）
@@ -650,6 +741,7 @@
                     body: JSON.stringify({
                         question: question,
                         session_id: sessionId,
+                        device_id: deviceId,
                         use_rag: true,
                         n_results: 3
                     })
@@ -660,8 +752,14 @@
                 // 通过保存的引用更新内容（使用assistantDiv引用，不用getElementById）
                 const textSpan = assistantDiv.querySelector(`.assistant-text-${msgId}`);
                 if (textSpan) {
-                    if (data.success && data.answer) {
+                    let assistantAnswer = '';
+                    if (!data.success && data.error === 'SESSION_OCCUPIED') {
+                        localStorage.removeItem('sessionId');
+                        textSpan.textContent = '当前会话已在另一台设备使用，请点击清空会话获取新的会话ID后继续。';
+                        assistantAnswer = textSpan.textContent;
+                    } else if (data.success && data.answer) {
                         textSpan.textContent = data.answer;
+                        assistantAnswer = data.answer;
                         // 如果有来源信息，添加来源标签
                         if (data.sources && data.sources.length > 0) {
                             // 移除旧的来源标签（如果有）
@@ -679,7 +777,9 @@
                         }
                     } else {
                         textSpan.textContent = data.answer || '服务暂时不可用，请稍后再试。';
+                        assistantAnswer = textSpan.textContent;
                     }
+                    saveChatMessage('assistant', assistantAnswer);
                 }
 
                 // 更新时间
@@ -813,8 +913,9 @@
 
                     this.model.anchor.set(0.5, 0.5);
                     this.model.x = this.app.screen.width / 2;
-                    this.model.y = this.app.screen.height / 2;
-                    this.model.scale.set(0.14,0.14);
+                    this.model.y = this.app.screen.height * 0.47;
+                    const initialScale = Math.min(width, height) / 1000;
+                    this.model.scale.set(initialScale * 0.24, initialScale * 0.24);
 
                     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -993,9 +1094,9 @@
                     const height = container.clientHeight;
                     this.app.renderer.resize(width, height);
                     this.model.x = this.app.screen.width / 2;
-                    this.model.y = this.app.screen.height / 2;
+                    this.model.y = this.app.screen.height * 0.47;
                     const scale = Math.min(width, height) / 1000;
-                    this.model.scale.set(scale * 0.22, scale * 0.22);
+                    this.model.scale.set(scale * 0.24, scale * 0.24);
                 } catch(e) {}
             },
 
@@ -1147,9 +1248,10 @@
                     }
                     sessionId = await initSessionFromServer();
                     localStorage.setItem('sessionId', sessionId);
+                    ensureEmptyChatSession(sessionId);
                     document.getElementById('sessionDisplay').textContent = sessionId;
                     chatMessages.innerHTML = '';
-                    addMessage('您好！我是灵山胜境的AI导游小灵，有什么可以帮助您的吗？', 'assistant');
+                    addMessage(DEFAULT_GREETING, 'assistant');
                     addMessage('对话已清空，新会话ID: ' + sessionId, 'assistant');
                     scrollToBottom();
                 } catch (err) {
@@ -1208,6 +1310,7 @@
         // ============================================================
         window.digitalHuman = DigitalHuman;
         DigitalHuman.init();
+        loadChatHistory();
         messageInput.focus();
 
         console.log('AI导游页面已加载');

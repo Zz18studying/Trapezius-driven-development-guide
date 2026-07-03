@@ -16,7 +16,12 @@
       </el-col>
       <el-col :span="12">
         <el-card>
-          <template #header>游客关注点 TOP6</template>
+          <template #header>
+            <span>游客关注点 TOP6</span>
+            <span style="font-size: 12px; color: #999; margin-left: 8px;">
+              （近30天累计）
+            </span>
+          </template>
           <el-table :data="hotTopics" stripe v-loading="loading.hotTopics">
             <el-table-column prop="topic" label="关注点" />
             <el-table-column prop="count" label="提及次数" />
@@ -99,7 +104,7 @@
             <el-table-column label="风险评分" width="100">
               <template #default="{ row }">
                 <span :style="{ 
-                  color: row.risk_score >= 60 ? '#f56c6c' : row.risk_score >= 30 ? '#e6a23c' : '#67c23a',
+                  color: row.risk_score >= 45 ? '#f56c6c' : row.risk_score >= 20 ? '#e6a23c' : '#67c23a',
                   fontWeight: 'bold'
                 }">
                   {{ row.risk_score }}
@@ -134,7 +139,7 @@
             </el-table-column>
           </el-table>
           <div v-if="highRiskSessions.length > 0" style="margin-top: 12px; font-size: 12px; color: #999;">
-            💡 风险评分 ≥ 60 为高风险，30-59 为中风险，&lt; 30 为低风险
+            💡 风险评分 ≥ 45 为高风险，20-44 为中风险，&lt; 20 为低风险
           </div>
         </el-card>
       </el-col>
@@ -163,7 +168,6 @@
               导出报告
             </el-button>
           </template>
-          <!-- 报告内容区域用 v-show，保留 DOM -->
           <div v-show="reportVisible" class="report-box">
             <div v-if="advancedReport" v-html="formatReport(advancedReport)"></div>
             <div v-else class="empty-text">
@@ -175,36 +179,50 @@
     </el-row>
 
     <!-- ===== 对话历史对话框 ===== -->
-    <el-dialog v-model="dialogVisible" :title="'会话详情：' + currentSessionId" width="900px">
+    <el-dialog v-model="dialogVisible" :title="'会话详情：' + currentSessionId" width="1000px" top="5vh">
       <div v-if="loading.history" class="loading-text">加载对话历史...</div>
-      <el-timeline v-else>
-        <el-timeline-item
-          v-for="item in sessionHistory"
-          :key="item.turn"
-          :timestamp="item.created_at"
-          :type="getTimelineType(item.sentiment)"
-          placement="top"
-        >
-          <el-card shadow="hover">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-              <div style="flex: 1;">
-                <el-tag :type="getSentimentType(item.sentiment)" size="small" style="margin-right: 8px;">
-                  {{ getSentimentLabel(item.sentiment) }}
-                </el-tag>
-                <span style="font-weight: bold;">第 {{ item.turn }} 轮</span>
+      <template v-else>
+        <!-- ===== 情绪轨迹折线图 ===== -->
+        <div v-if="trajectoryData.length > 0" style="margin-bottom: 24px;">
+          <h4 style="margin: 0 0 12px 0; color: #1a3a4a;">情绪演变轨迹</h4>
+          <div ref="trajectoryChart" style="height: 200px; width: 100%;"></div>
+          <div style="display: flex; justify-content: center; gap: 24px; margin-top: 8px; font-size: 13px; color: #666;">
+            <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#10b981;vertical-align:middle;margin-right:4px;"></span> 正面</span>
+            <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f59e0b;vertical-align:middle;margin-right:4px;"></span> 中性</span>
+            <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444;vertical-align:middle;margin-right:4px;"></span> 负面</span>
+          </div>
+        </div>
+
+        <!-- ===== 对话时间线 ===== -->
+        <el-timeline>
+          <el-timeline-item
+            v-for="item in sessionHistory"
+            :key="item.turn"
+            :timestamp="item.created_at"
+            :type="getTimelineType(item.sentiment)"
+            placement="top"
+          >
+            <el-card shadow="hover">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div style="flex: 1;">
+                  <el-tag :type="getSentimentType(item.sentiment)" size="small" style="margin-right: 8px;">
+                    {{ getSentimentLabel(item.sentiment) }}
+                  </el-tag>
+                  <span style="font-weight: bold;">第 {{ item.turn }} 轮</span>
+                </div>
               </div>
-            </div>
-            <div style="margin-top: 8px;">
-              <div style="color: #409EFF; margin-bottom: 4px;">
-                <strong>问：</strong>{{ item.question }}
+              <div style="margin-top: 8px;">
+                <div style="color: #409EFF; margin-bottom: 4px;">
+                  <strong>问：</strong>{{ item.question }}
+                </div>
+                <div style="color: #67C23A;">
+                  <strong>答：</strong>{{ item.answer }}
+                </div>
               </div>
-              <div style="color: #67C23A;">
-                <strong>答：</strong>{{ item.answer }}
-              </div>
-            </div>
-          </el-card>
-        </el-timeline-item>
-      </el-timeline>
+            </el-card>
+          </el-timeline-item>
+        </el-timeline>
+      </template>
       <template #footer>
         <el-button @click="dialogVisible = false">关闭</el-button>
         <el-button type="primary" @click="exportSessionHistory">导出对话</el-button>
@@ -224,7 +242,9 @@ import axios from 'axios'
 // 状态变量
 // ============================================================
 const emotionPie = ref(null)
+const trajectoryChart = ref(null)   // 轨迹图 DOM 引用
 let chartInstance = null
+let trajectoryChartInstance = null  // 轨迹图 ECharts 实例
 
 const loading = ref({
   overview: false,
@@ -236,7 +256,6 @@ const loading = ref({
 
 const isGenerating = ref(false)
 
-// 初始化为空，不加 mock
 const overview = ref({
   total_conversations: 0,
   today_conversations: 0,
@@ -248,23 +267,23 @@ const overview = ref({
 })
 
 const hotTopics = ref([])
-
-// 计算总提及次数（用于占比计算）
-const totalMentions = computed(() => {
-  return hotTopics.value.reduce((sum, t) => sum + t.count, 0)
-})
-
 const suggestions = ref([])
 const highRiskSessions = ref([])
 
-// 高级报告相关
 const advancedReport = ref(null)
-const reportVisible = ref(false)   // 控制展开/收起
+const reportVisible = ref(false)
 
-// 对话框
 const dialogVisible = ref(false)
 const currentSessionId = ref('')
 const sessionHistory = ref([])
+const trajectoryData = ref([])  // 情绪轨迹数据
+
+// ============================================================
+// 计算属性
+// ============================================================
+const totalMentions = computed(() => {
+  return hotTopics.value.reduce((sum, t) => sum + t.count, 0)
+})
 
 // ============================================================
 // 工具函数
@@ -282,6 +301,11 @@ const getSentimentLabel = (sentiment) => {
 const getTimelineType = (sentiment) => {
   const map = { positive: 'success', neutral: 'warning', negative: 'danger' }
   return map[sentiment] || 'primary'
+}
+
+const getSentimentScore = (sentiment) => {
+  const map = { positive: 1, neutral: 0, negative: -1 }
+  return map[sentiment] ?? 0
 }
 
 const formatReport = (text) => {
@@ -345,7 +369,6 @@ const fetchSuggestions = async () => {
 const fetchHighRiskSessions = async () => {
   loading.value.highRisk = true
   try {
-    // threshold 参数改为 high/medium/low
     const res = await axios.get(`${API_BASE}/sentiment/high-risk?days=7&threshold=high`)
     if (res.data.code === 0) {
       highRiskSessions.value = res.data.data
@@ -358,7 +381,7 @@ const fetchHighRiskSessions = async () => {
 }
 
 // ============================================================
-// 饼图渲染（带重试机制）
+// 饼图渲染
 // ============================================================
 const renderPieChart = () => {
   const container = emotionPie.value
@@ -425,25 +448,141 @@ const renderPieChart = () => {
 }
 
 // ============================================================
-// 高风险会话操作
+// 情绪轨迹折线图渲染
+// ============================================================
+const renderTrajectoryChart = () => {
+  const container = trajectoryChart.value
+  if (!container) {
+    console.warn('轨迹图容器不存在')
+    return
+  }
+
+  const rect = container.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) {
+    setTimeout(renderTrajectoryChart, 200)
+    return
+  }
+
+  try {
+    if (trajectoryChartInstance) {
+      trajectoryChartInstance.dispose()
+    }
+    trajectoryChartInstance = echarts.init(container)
+
+    const scoreMap = { positive: 1, neutral: 0, negative: -1 }
+    const scores = trajectoryData.value.map(t => scoreMap[t] ?? 0)
+    const labels = trajectoryData.value.map((_, i) => `第${i+1}轮`)
+
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        formatter: function(params) {
+          const idx = params[0].dataIndex
+          const sentiment = trajectoryData.value[idx] || 'neutral'
+          const sentimentLabel = getSentimentLabel(sentiment)
+          return `<strong>第${idx+1}轮</strong><br/>情绪：${sentimentLabel}`
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: {
+          fontSize: 11,
+          interval: Math.floor(labels.length / 10)
+        },
+        axisLine: { lineStyle: { color: '#ddd' } }
+      },
+      yAxis: {
+        type: 'value',
+        min: -1.3,
+        max: 1.3,
+        splitLine: { lineStyle: { color: '#f0f0f0', type: 'dashed' } },
+        axisLabel: { show: false },
+        axisLine: { show: false }
+      },
+      grid: {
+        top: 20,
+        bottom: 30,
+        left: 10,
+        right: 20
+      },
+      series: [{
+        type: 'line',
+        data: scores,
+        smooth: true,
+        lineStyle: { color: '#3b82f6', width: 3 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+            { offset: 1, color: 'rgba(59, 130, 246, 0.02)' }
+          ])
+        },
+        symbol: 'circle',
+        symbolSize: 8,
+        itemStyle: {
+          color: function(params) {
+            const val = params.value
+            if (val >= 0.5) return '#10b981'
+            if (val >= -0.5) return '#f59e0b'
+            return '#ef4444'
+          }
+        },
+        markLine: {
+          silent: true,
+          data: [
+            { yAxis: 0 }
+          ],
+          lineStyle: { color: '#ccc', type: 'dashed' },
+          label: { show: false }   // 隐藏“中性”标签
+        }
+      }]
+    }
+
+    trajectoryChartInstance.setOption(option)
+
+    setTimeout(() => {
+      trajectoryChartInstance?.resize()
+    }, 100)
+
+    console.log('✅ 情绪轨迹图渲染成功')
+  } catch (err) {
+    console.error('情绪轨迹图渲染失败:', err)
+  }
+}
+
+// ============================================================
+// 查看会话历史（含情绪轨迹）
 // ============================================================
 const viewSessionHistory = async (sessionId) => {
   currentSessionId.value = sessionId
   dialogVisible.value = true
   loading.value.history = true
   sessionHistory.value = []
+  trajectoryData.value = []
 
   try {
-    const res = await axios.get(`${API_BASE}/sentiment/session/${sessionId}/history`)
-    if (res.data.code === 0) {
-      sessionHistory.value = res.data.data
+    const [historyRes, trajectoryRes] = await Promise.all([
+      axios.get(`${API_BASE}/sentiment/session/${sessionId}/history`),
+      axios.get(`${API_BASE}/sentiment/session/${sessionId}/trajectory`)
+    ])
+
+    if (historyRes.data.code === 0) {
+      sessionHistory.value = historyRes.data.data
       if (sessionHistory.value.length === 0) {
         ElMessage.warning('该会话暂无对话记录')
       }
     }
+
+    if (trajectoryRes.data.code === 0) {
+      trajectoryData.value = trajectoryRes.data.data.trajectory || []
+      await nextTick()
+      setTimeout(() => {
+        renderTrajectoryChart()
+      }, 300)
+    }
   } catch (err) {
-    console.error('获取会话历史失败:', err)
-    ElMessage.error('获取会话历史失败')
+    console.error('获取会话数据失败:', err)
+    ElMessage.error('获取会话数据失败')
   } finally {
     loading.value.history = false
   }
@@ -505,7 +644,11 @@ const exportSessionHistory = () => {
   let text = `会话ID：${currentSessionId.value}\n`
   text += `导出时间：${new Date().toLocaleString()}\n`
   text += '='.repeat(60) + '\n\n'
-  
+
+  if (trajectoryData.value.length > 0) {
+    text += '情绪轨迹：' + trajectoryData.value.map(t => getSentimentLabel(t)).join(' → ') + '\n\n'
+  }
+
   sessionHistory.value.forEach(item => {
     text += `[第${item.turn}轮] ${item.created_at}\n`
     text += `情绪：${getSentimentLabel(item.sentiment)}\n`
@@ -552,6 +695,9 @@ window.addEventListener('resize', () => {
   if (chartInstance) {
     setTimeout(() => chartInstance?.resize(), 100)
   }
+  if (trajectoryChartInstance) {
+    setTimeout(() => trajectoryChartInstance?.resize(), 100)
+  }
 })
 
 watch(advancedReport, (newVal) => {
@@ -559,6 +705,17 @@ watch(advancedReport, (newVal) => {
     localStorage.setItem('sentiment_report', newVal)
   } else {
     localStorage.removeItem('sentiment_report')
+  }
+})
+
+watch(dialogVisible, (newVal) => {
+  if (!newVal) {
+    setTimeout(() => {
+      if (trajectoryChartInstance) {
+        trajectoryChartInstance.dispose()
+        trajectoryChartInstance = null
+      }
+    }, 300)
   }
 })
 </script>
@@ -628,6 +785,10 @@ watch(advancedReport, (newVal) => {
   word-break: break-word;
 }
 
+:deep(.el-dialog__body) {
+  padding: 20px 24px;
+}
+
 :deep(.el-timeline) {
   padding: 0;
 }
@@ -636,5 +797,19 @@ watch(advancedReport, (newVal) => {
 }
 :deep(.el-card__body) {
   padding: 12px 16px;
+}
+
+@media (max-width: 768px) {
+  .welcome-content h1 {
+    font-size: 32px;
+  }
+  .welcome-content p {
+    font-size: 14px;
+    letter-spacing: 4px;
+  }
+  .welcome-btn {
+    padding: 10px 28px;
+    font-size: 14px;
+  }
 }
 </style>

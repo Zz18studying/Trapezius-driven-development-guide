@@ -147,6 +147,8 @@
             height: 560px;
             background-size: cover;
             background-position: center;
+            background-repeat: no-repeat;
+            background-color: #123241;
             position: relative;
         }
         .detail-container .detail-img .overlay {
@@ -236,6 +238,108 @@
             font-size: 13px;
             color: #4a6a7a;
             font-weight: 500;
+        }
+
+        .review-panel {
+            display: grid;
+            gap: 16px;
+            background: #f7fbfd;
+            border: 1px solid rgba(44, 110, 138, 0.12);
+            border-radius: 16px;
+            padding: 18px;
+        }
+
+        .rating-picker {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .star-btn {
+            width: 34px;
+            height: 34px;
+            border: 0;
+            background: transparent;
+            color: #c3d0d8;
+            font-size: 28px;
+            line-height: 1;
+            cursor: pointer;
+            transition: color 0.2s ease, transform 0.2s ease;
+        }
+
+        .star-btn.active,
+        .star-btn:hover {
+            color: #d7a84f;
+            transform: translateY(-1px);
+        }
+
+        .review-textarea {
+            width: 100%;
+            min-height: 92px;
+            resize: vertical;
+            border: 1px solid rgba(44, 110, 138, 0.18);
+            border-radius: 12px;
+            padding: 12px 14px;
+            font: inherit;
+            color: #1a3a4a;
+            outline: none;
+            background: white;
+        }
+
+        .review-textarea:focus {
+            border-color: #4a90b0;
+            box-shadow: 0 0 0 4px rgba(74, 144, 176, 0.08);
+        }
+
+        .review-submit {
+            justify-self: start;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 24px;
+            background: linear-gradient(135deg, #2c6e8a, #4a90b0);
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .review-note,
+        .review-empty {
+            color: #6a8a9a;
+            font-size: 14px;
+        }
+
+        .review-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .review-item {
+            background: white;
+            border: 1px solid rgba(44, 110, 138, 0.1);
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .review-item-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            color: #6a8a9a;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .review-stars {
+            color: #d7a84f;
+            font-weight: 800;
+        }
+
+        .review-comment {
+            color: #1a3a4a;
+            font-size: 14px;
+            line-height: 1.7;
+            word-break: break-word;
         }
 
         .detail-actions {
@@ -526,6 +630,222 @@
             return params.get(name);
         }
 
+        const SPOT_REVIEWS_KEY = 'lingshan_spot_reviews';
+        const DEVICE_ID_KEY = 'lingshan_device_id';
+        let selectedReviewRating = 0;
+        let spotReviewCache = {};
+
+        function createDeviceId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return `device_${window.crypto.randomUUID()}`;
+            }
+            const randomPart = Math.random().toString(36).slice(2, 12);
+            return `device_${Date.now().toString(36)}_${randomPart}`;
+        }
+
+        function getOrCreateDeviceId() {
+            let id = localStorage.getItem(DEVICE_ID_KEY);
+            if (!id) {
+                id = createDeviceId();
+                localStorage.setItem(DEVICE_ID_KEY, id);
+            }
+            return id;
+        }
+
+        function isValidSessionId(id) {
+            return /^lingshan_\d{8}_\d{4}$/.test(id || '');
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function readSpotReviews() {
+            try {
+                return JSON.parse(localStorage.getItem(SPOT_REVIEWS_KEY) || '{}') || {};
+            } catch (err) {
+                console.warn('Failed to read spot reviews:', err);
+                return {};
+            }
+        }
+
+        function writeSpotReviews(reviews) {
+            localStorage.setItem(SPOT_REVIEWS_KEY, JSON.stringify(reviews));
+        }
+
+        function getSpotReviews(spotId) {
+            const cached = spotReviewCache[String(spotId)];
+            if (cached && Array.isArray(cached.reviews)) {
+                return cached.reviews;
+            }
+
+            const reviews = readSpotReviews();
+            return Array.isArray(reviews[String(spotId)]) ? reviews[String(spotId)] : [];
+        }
+
+        function getCurrentSessionId() {
+            const sessionId = localStorage.getItem('sessionId') || '';
+            return isValidSessionId(sessionId) ? sessionId : '';
+        }
+
+        async function initSessionFromServer() {
+            const deviceId = getOrCreateDeviceId();
+            const response = await fetch(`/api/chat/session/init?device_id=${encodeURIComponent(deviceId)}`);
+            const data = await response.json();
+            if (data.code === 0 && data.data && data.data.session_id) {
+                localStorage.setItem('sessionId', data.data.session_id);
+                return data.data.session_id;
+            }
+            throw new Error(data.msg || '分配会话 ID 失败');
+        }
+
+        async function ensureCurrentSessionId() {
+            const existing = getCurrentSessionId();
+            if (existing) return existing;
+            return await initSessionFromServer();
+        }
+
+        function getMyReview(spotId) {
+            const sessionId = getCurrentSessionId();
+            if (!sessionId) return null;
+            return getSpotReviews(spotId).find(review => (review.sessionId || review.session_id) === sessionId) || null;
+        }
+
+        function getSpotRatingSummary(spotId) {
+            const cached = spotReviewCache[String(spotId)];
+            if (cached && cached.summary) {
+                return {
+                    count: Number(cached.summary.count) || 0,
+                    average: Number(cached.summary.average) || 0
+                };
+            }
+
+            const ratings = getSpotReviews(spotId)
+                .map(review => Number(review.rating))
+                .filter(rating => Number.isFinite(rating) && rating >= 1 && rating <= 5);
+
+            if (ratings.length === 0) {
+                return { count: 0, average: 0 };
+            }
+
+            const total = ratings.reduce((sum, rating) => sum + rating, 0);
+            return { count: ratings.length, average: total / ratings.length };
+        }
+
+        function formatSpotRating(summary) {
+            return summary.count > 0 ? `${summary.average.toFixed(1)} / 5.0（${summary.count}人）` : '暂无评分';
+        }
+
+        function formatReviewTime(value) {
+            if (!value) return '';
+            return new Date(value).toLocaleString();
+        }
+
+        function renderStars(rating) {
+            const count = Math.max(0, Math.min(5, Number(rating) || 0));
+            return '★'.repeat(count) + '☆'.repeat(5 - count);
+        }
+
+        function setReviewRating(rating) {
+            selectedReviewRating = rating;
+            document.querySelectorAll('.star-btn').forEach(button => {
+                const value = Number(button.dataset.rating);
+                button.classList.toggle('active', value <= rating);
+            });
+        }
+
+        async function loadSpotReviewData(spotId) {
+            try {
+                const res = await fetch(`/api/spots/${spotId}/reviews`);
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    spotReviewCache[String(spotId)] = data.data;
+                    return data.data;
+                }
+            } catch (err) {
+                console.warn('Spot review API unavailable, using local reviews:', err);
+            }
+
+            return {
+                summary: getSpotRatingSummary(spotId),
+                reviews: getSpotReviews(spotId)
+            };
+        }
+
+        async function submitSpotReview(spotId) {
+            let sessionId = '';
+            try {
+                sessionId = await ensureCurrentSessionId();
+            } catch (err) {
+                console.error('Init session failed:', err);
+                alert('暂时无法获取会话 ID，请稍后再试。');
+                return;
+            }
+
+            if (getMyReview(spotId)) {
+                alert('当前会话 ID 已经评价过这个景点啦。');
+                return;
+            }
+
+            if (!Number.isFinite(selectedReviewRating) || selectedReviewRating < 1 || selectedReviewRating > 5) {
+                alert('请先选择 1 到 5 星评分。');
+                return;
+            }
+
+            const commentInput = document.getElementById('reviewComment');
+            const comment = commentInput ? commentInput.value.trim() : '';
+
+            try {
+                const res = await fetch(`/api/spots/${spotId}/reviews`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        rating: selectedReviewRating,
+                        comment
+                    })
+                });
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    spotReviewCache[String(spotId)] = {
+                        summary: data.data.summary,
+                        reviews: data.data.reviews || []
+                    };
+                    selectedReviewRating = 0;
+                    alert('评价已提交，感谢反馈！');
+                    renderDetail();
+                    return;
+                }
+                alert(data.msg || '评价提交失败，请稍后再试。');
+                return;
+            } catch (err) {
+                console.warn('Spot review API unavailable, saving locally:', err);
+            }
+
+            const reviews = readSpotReviews();
+            const key = String(spotId);
+            const spotReviews = Array.isArray(reviews[key]) ? reviews[key] : [];
+
+            spotReviews.push({
+                sessionId,
+                rating: selectedReviewRating,
+                comment,
+                createdAt: new Date().toISOString()
+            });
+
+            reviews[key] = spotReviews;
+            writeSpotReviews(reviews);
+            delete spotReviewCache[key];
+            selectedReviewRating = 0;
+            alert('评价已提交，感谢反馈！');
+            renderDetail();
+        }
+
         // ============================================================
         // 语音讲解（调用后端 TTS）
         // ============================================================
@@ -595,7 +915,7 @@
         // ============================================================
         // 渲染详情
         // ============================================================
-        function renderDetail() {
+        async function renderDetail() {
             const id = parseInt(getUrlParam('id'));
             const spot = spotsData.find(s => s.id === id);
 
@@ -613,14 +933,48 @@
 
             // 将 detail 中的 \n 转换为 <br>
             const detailHtml = spot.detail.replace(/\n/g, '<br>');
+            await loadSpotReviewData(spot.id);
+            const ratingSummary = getSpotRatingSummary(spot.id);
+            const ratingText = formatSpotRating(ratingSummary);
+            const reviews = getSpotReviews(spot.id)
+                .slice()
+                .sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
+            const myReview = getMyReview(spot.id);
+            const sessionId = getCurrentSessionId();
+            const reviewFormHtml = myReview ? `
+                    <div class="review-note">
+                        你已用当前会话 ID 评价过该景点：<span class="review-stars">${renderStars(myReview.rating)}</span>
+                    </div>
+                ` : `
+                    <div class="rating-picker" aria-label="选择评分">
+                        ${[1, 2, 3, 4, 5].map(value => `
+                            <button class="star-btn" type="button" data-rating="${value}" onclick="setReviewRating(${value})" aria-label="${value} 星">★</button>
+                        `).join('')}
+                        <span class="review-note">${sessionId ? `当前会话：${escapeHtml(sessionId)}` : '提交评价时会自动生成会话 ID'}</span>
+                    </div>
+                    <textarea class="review-textarea" id="reviewComment" maxlength="300" placeholder="写下你的游览感受，可选"></textarea>
+                    <button class="review-submit" type="button" onclick="submitSpotReview(${spot.id})">提交评价</button>
+                `;
+            const reviewListHtml = reviews.length > 0 ? `
+                    <div class="review-list">
+                        ${reviews.map(review => `
+                            <div class="review-item">
+                                <div class="review-item-header">
+                                    <span class="review-stars">${renderStars(review.rating)}</span>
+                                    <span>${escapeHtml(review.sessionId || review.session_id || '匿名游客')} · ${formatReviewTime(review.createdAt || review.created_at)}</span>
+                                </div>
+                                ${review.comment ? `<div class="review-comment">${escapeHtml(review.comment)}</div>` : `<div class="review-empty">这位游客只留下了星级评分。</div>`}
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<div class="review-empty">还没有游客评价，成为第一个评分的人吧。</div>';
 
             document.getElementById('detailContainer').innerHTML = `
                     <div class="detail-img" style="background-image: url('${spot.image}');">
                         <div class="overlay">
                             <h1>${spot.icon} ${spot.name}</h1>
                             <div class="sub-info">
-                                <span>评分 ${spot.rating}</span>
-                                <span>位置 ${spot.location}</span>
+                                <span>评分 ${ratingText}</span>
                                 <span>建议 ${spot.time}</span>
                                 <span>热度 ${spot.visitors}</span>
                             </div>
@@ -636,16 +990,12 @@
                             <h2>基本信息</h2>
                             <div class="info-grid">
                                 <div class="info-item">
-                                    <div class="label">位置</div>
-                                    <div class="value">${spot.location}</div>
-                                </div>
-                                <div class="info-item">
                                     <div class="label">建议游览</div>
                                     <div class="value">${spot.time}</div>
                                 </div>
                                 <div class="info-item">
                                     <div class="label">评分</div>
-                                    <div class="value">${spot.rating} / 5.0</div>
+                                    <div class="value">${ratingText}</div>
                                 </div>
                                 <div class="info-item">
                                     <div class="label">日均游客</div>
@@ -658,6 +1008,14 @@
                             <h2>标签</h2>
                             <div class="detail-tags-wrap">
                                 ${spot.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="detail-section">
+                            <h2>游客评价</h2>
+                            <div class="review-panel">
+                                ${reviewFormHtml}
+                                ${reviewListHtml}
                             </div>
                         </div>
 

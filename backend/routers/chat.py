@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-对话路由 - 基于知识库的问答接口
+对话路由 - 基于知识库的问答接口。
 """
 
 import time
-import json
+import random
+import re
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
@@ -18,56 +20,16 @@ from services.rag_service import get_rag_service
 from services.llm_service import get_llm_service
 from services.db_service import save_conversation
 from services.sentiment_service import analyze_sentiment
-from models.database import SessionLocal, Conversation
+from services.knowledge_constants import extract_attraction_name
 
 router = APIRouter(prefix="/api/chat", tags=["对话"])
-
-
-# ==================== 景点名称列表与过滤函数 ====================
-ATTRACTION_NAMES = [
-    "灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城", "祥符禅寺",
-    "拈花广场", "梵天花海", "香月花街", "五灯湖", "灵山大照壁",
-    "阿育王柱", "百子戏弥勒", "曼飞龙塔", "无尽意斋", "鹿鸣谷",
-    "灵山精舍", "菩提大道", "五明桥", "佛足坛", "五智门",
-    "降魔浮雕", "佛教文化博览馆"
-]
-
-
-def extract_attraction_name(question: str) -> Optional[str]:
-    """从用户问题中提取景点名称"""
-    for name in ATTRACTION_NAMES:
-        if name in question:
-            return name
-    return None
-
-
-def filter_sources_by_attraction(sources: List[dict], question: str) -> List[dict]:
-    """过滤检索结果，优先保留景点名称匹配的"""
-    if not sources:
-        return sources
-    
-    attraction_name = extract_attraction_name(question)
-    if not attraction_name:
-        return sources
-    
-    matched = []
-    unmatched = []
-    for source in sources:
-        if attraction_name in source.get('question', ''):
-            matched.append(source)
-        else:
-            unmatched.append(source)
-    
-    # 如果有匹配的，只返回匹配的；否则返回全部（让后续流程处理）
-    if matched:
-        print(f"[API] 景点过滤: 保留 {len(matched)} 条匹配 '{attraction_name}' 的结果")
-        return matched
-    return sources
+SESSION_ID_RE = re.compile(r"^lingshan_\d{8}_\d{4}$")
 
 
 class ChatRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
+    device_id: Optional[str] = None
     use_rag: Optional[bool] = True
     n_results: Optional[int] = 3
     verify: Optional[bool] = True
@@ -92,153 +54,239 @@ class SearchResponse(BaseModel):
     error: Optional[str] = None
 
 
-def is_fast_path_answer(sources: List[dict]) -> Optional[str]:
-    if not sources or len(sources) == 0:
-        return None
-    top = sources[0]
-    similarity = top.get('similarity', 0)
-    answer = top.get('answer', '')
-    if (similarity >= 0.85 and
-        "抱歉" not in answer and
-        "暂无相关信息" not in answer and
-        len(answer) < 350 and
-        len(answer) > 5):
-        return answer
-    return None
+def filter_sources_by_attraction(sources: List[dict], question: str) -> List[dict]:
+    """当用户明确提到景点时，优先保留该景点相关来源。"""
+    attraction_name = extract_attraction_name(question)
+    if not sources or not attraction_name:
+        return sources
+
+    matched = [
+        source for source in sources
+        if (
+            source.get("attraction_name") == attraction_name
+            or attraction_name in source.get("question", "")
+        )
+    ]
+    if matched:
+        print(f"[API] 景点过滤: 保留 {len(matched)} 条匹配 '{attraction_name}' 的结果")
+        return matched
+    print(f"[API] 景点过滤: 未找到 '{attraction_name}' 的匹配来源，丢弃无关结果")
+    return []
+
+
+def persist_conversation(session_id: str, question: str, answer: str, sources: List[dict], started_at: float):
+    try:
+        sentiment = analyze_sentiment(question)
+        save_conversation(
+            session_id=session_id or "unknown",
+            question=question,
+            answer=answer,
+            sources=sources or None,
+            response_time=time.time() - started_at,
+            sentiment=sentiment
+        )
+        print("[API] 对话记录已保存")
+    except Exception as e:
+        print(f"[API] 保存对话记录失败: {e}")
+
+
+def normalize_device_id(device_id: Optional[str]) -> str:
+    value = (device_id or "").strip()
+    value = "".join(ch for ch in value if ch.isalnum() or ch in ("-", "_"))
+    return value[:80] or "unknown"
+
+
+def ensure_session_owner(session_id: Optional[str], device_id: Optional[str]) -> bool:
+    if not session_id:
+        return True
+    if not SESSION_ID_RE.match(session_id):
+        return False
+
+    from models.database import SessionLocal
+    from sqlalchemy import text
+
+    owner = normalize_device_id(device_id)
+    db = SessionLocal()
+    try:
+        row = db.execute(
+            text("SELECT device_id FROM session_allocations WHERE session_id = :session_id"),
+            {"session_id": session_id}
+        ).fetchone()
+
+        if row:
+            if row[0] and row[0] not in (owner, "review_only"):
+                return False
+            db.execute(
+                text(
+                    "UPDATE session_allocations "
+                    "SET device_id = :device_id, updated_at = :updated_at "
+                    "WHERE session_id = :session_id"
+                ),
+                {"session_id": session_id, "device_id": owner, "updated_at": datetime.now()}
+            )
+        else:
+            result = db.execute(
+                text(
+                    "INSERT OR IGNORE INTO session_allocations (session_id, device_id, created_at, updated_at) "
+                    "VALUES (:session_id, :device_id, :created_at, :updated_at)"
+                ),
+                {
+                    "session_id": session_id,
+                    "device_id": owner,
+                    "created_at": datetime.now(),
+                    "updated_at": datetime.now()
+                }
+            )
+            if result.rowcount != 1:
+                row = db.execute(
+                    text("SELECT device_id FROM session_allocations WHERE session_id = :session_id"),
+                    {"session_id": session_id}
+                ).fetchone()
+                if not row or (row[0] and row[0] not in (owner, "review_only")):
+                    db.rollback()
+                    return False
+                db.execute(
+                    text(
+                        "UPDATE session_allocations "
+                        "SET device_id = :device_id, updated_at = :updated_at "
+                        "WHERE session_id = :session_id"
+                    ),
+                    {"session_id": session_id, "device_id": owner, "updated_at": datetime.now()}
+                )
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"[session/owner] 检查失败: {e}")
+        return False
+    finally:
+        db.close()
+
+
+def friendly_no_context_answer(question: str) -> str:
+    attraction_name = extract_attraction_name(question)
+    if attraction_name:
+        return f"我这边这次没有稳定查到{attraction_name}的对应资料。你可以换个问法，比如问“{attraction_name}介绍”“{attraction_name}有什么看点”或“{attraction_name}开放时间”，我再帮你查。"
+    return "我这边资料里暂时没查到这部分。你可以把问题说得更具体一点，比如问某个景点、门票、开放时间、演出或路线，我再帮你查。"
+
+
+def friendly_service_error() -> str:
+    return "我这边刚刚连接有点不稳定，你可以稍后再问一次，我会继续帮你查。"
 
 
 @router.post("/ask", response_model=ChatResponse)
 async def ask(request: ChatRequest):
-    """
-    对话接口 - 基于知识库的问答
-    """
+    """对话接口 - 基于知识库的问答。"""
     total_start = time.time()
-    print(f"\n[API] 收到请求: {request.question[:50]}...")
+    question = request.question.strip()
+    print(f"\n[API] 收到请求: {question[:50]}...")
     print(f"[API] session_id: {request.session_id or '新会话'}")
-    
-    try:
-        print(f"[API] verify: {request.verify}")
 
+    if not question:
+        return ChatResponse(success=False, answer="请输入问题。", sources=None, error="empty question")
+
+    if not ensure_session_owner(request.session_id, request.device_id):
+        return ChatResponse(
+            success=False,
+            answer="当前会话 ID 已在另一台设备使用，请开启新的会话后继续。",
+            sources=None,
+            error="SESSION_OCCUPIED"
+        )
+
+    try:
         rag_service = get_rag_service()
         llm_service = get_llm_service()
 
-        resolved_question = llm_service.resolve_pronoun(request.question, request.session_id)
+        resolved_question = llm_service.resolve_pronoun(question, request.session_id)
         print(f"[API] 解析后问题: {resolved_question}")
+
+        needs_knowledge = request.use_rag and llm_service.needs_knowledge_base(resolved_question)
+
+        if not needs_knowledge:
+            llm_result = llm_service.chat_general(
+                question=resolved_question,
+                session_id=request.session_id
+            )
+            answer = llm_result["answer"] if llm_result["success"] else "你好，我是灵山胜境景区的 AI 数字导游小灵。"
+            persist_conversation(request.session_id, resolved_question, answer, [], total_start)
+            return ChatResponse(success=True, answer=answer, sources=None, error=None)
 
         context = ""
         sources = []
 
-        if request.use_rag and rag_service.is_ready():
+        if needs_knowledge and rag_service.is_ready():
             rag_start = time.time()
             search_result = rag_service.search(resolved_question, request.n_results)
             print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
 
-            if search_result['success'] and search_result['results']:
-                sources = search_result['results'][:3]
-                sources = filter_sources_by_attraction(sources, resolved_question)
-                context_parts = []
-                for i, r in enumerate(sources[:request.n_results], 1):
-                    context_parts.append(f"【参考{i}】\n问题：{r['question']}\n答案：{r['answer']}")
-                context = "\n\n".join(context_parts)
+            if search_result["success"] and search_result["results"]:
+                sources = filter_sources_by_attraction(search_result["results"], resolved_question)
+                context = rag_service.build_context(sources, request.n_results)
 
-        fast_answer = is_fast_path_answer(sources)
-        if fast_answer:
-            print(f"[API] ⚡ 快速路径命中！总耗时: {time.time() - total_start:.2f}秒")
-            sentiment = analyze_sentiment(resolved_question)
-            try:
-                sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
-                save_conversation(
-                    session_id=request.session_id or "unknown",
-                    question=resolved_question,
-                    answer=fast_answer,
-                    sources=sources_json,
-                    response_time=time.time() - total_start,
-                    sentiment=sentiment
-                )
-            except Exception as e:
-                print(f"[API] 保存对话记录失败: {e}")
-            if request.session_id:
-                session_data = llm_service.get_or_create_session(request.session_id)
-                session_data["last_question"] = resolved_question
-            return ChatResponse(
-                success=True,
-                answer=fast_answer,
-                sources=sources if sources else None,
-                error=None
-            )
-
-        if request.use_rag and not context:
-            if request.session_id:
-                session_data = llm_service.get_or_create_session(request.session_id)
-                session_data["last_question"] = resolved_question
-            return ChatResponse(
-                success=True,
-                answer="抱歉，目前知识库中暂无相关信息。",
-                sources=None,
-                error=None
-            )
+        if needs_knowledge and not context:
+            answer = friendly_no_context_answer(resolved_question)
+            llm_service.remember_turn(request.session_id, resolved_question, answer)
+            persist_conversation(request.session_id, resolved_question, answer, sources, total_start)
+            return ChatResponse(success=True, answer=answer, sources=None, error=None)
 
         llm_start = time.time()
-        
-        if request.verify:
-            print(f"[API] ✅ 启用交叉验证模式")
-            from services.safe_llm_service import get_safe_llm_service
-            safe_llm_service = get_safe_llm_service()
-            llm_result = await safe_llm_service.ask_with_verification(
-                question=resolved_question,
-                context=context,
-                session_id=request.session_id
-            )
-        else:
-            llm_result = llm_service.chat(
-                question=resolved_question,
-                context=context,
-                session_id=request.session_id
-            )
-        
+        llm_result = llm_service.chat(
+            question=resolved_question,
+            context=context,
+            session_id=request.session_id,
+            remember=False
+        )
         print(f"[API] LLM调用耗时: {time.time() - llm_start:.2f}秒")
 
-        if not llm_result['success']:
-            if sources:
-                answer = sources[0].get('answer', '服务暂时不可用，请稍后再试。')
-            else:
-                answer = "服务暂时不可用，请稍后再试。"
+        if not llm_result["success"]:
+            fallback = sources[0].get("answer", friendly_service_error()) if sources else friendly_service_error()
             return ChatResponse(
                 success=False,
-                answer=answer,
-                sources=sources if sources else None,
-                error=llm_result['error']
+                answer=fallback,
+                sources=sources or None,
+                error=llm_result.get("error")
             )
 
-        sentiment = analyze_sentiment(resolved_question)
-        answer = llm_result['answer']
+        answer = llm_result["answer"]
 
-        try:
-            sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
-            save_conversation(
-                session_id=request.session_id or "unknown",
-                question=resolved_question,
-                answer=answer,
-                sources=sources_json,
-                response_time=time.time() - total_start,
-                sentiment=sentiment
+        should_verify = False
+        verify_reason = ""
+        if request.verify:
+            should_verify, verify_reason = llm_service.should_verify_answer(
+                resolved_question,
+                context,
+                answer,
+                sources
             )
-            print("[API] 对话记录已保存")
-        except Exception as e:
-            print(f"[API] 保存对话记录失败: {e}")
+
+        elapsed_before_verify = time.time() - total_start
+        if should_verify and elapsed_before_verify >= 4.8:
+            print(f"[API] 跳过LLM核验: 已耗时 {elapsed_before_verify:.2f}秒，优先保证响应速度")
+            should_verify = False
+            verify_reason = "时间预算不足，跳过二次核验"
+
+        if should_verify:
+            verify_start = time.time()
+            verify_result = llm_service.verify_answer(resolved_question, context, answer)
+            print(
+                f"[API] LLM核验耗时: {time.time() - verify_start:.2f}秒 | "
+                f"触发原因: {verify_reason} | 结论: {verify_result.get('verdict')} | 原因: {verify_result.get('reason')}"
+            )
+            if verify_result.get("success"):
+                answer = verify_result.get("answer") or answer
+        else:
+            print(f"[API] 跳过LLM核验: {verify_reason or '未开启核验'}")
+
+        llm_service.remember_turn(request.session_id, resolved_question, answer)
+        persist_conversation(request.session_id, resolved_question, answer, sources, total_start)
 
         print(f"[API] 总耗时: {time.time() - total_start:.2f}秒")
-        return ChatResponse(
-            success=True,
-            answer=answer,
-            sources=sources if sources else None,
-            error=None
-        )
+        return ChatResponse(success=True, answer=answer, sources=sources or None, error=None)
     except Exception as e:
         print(f"[API] 异常: {e}")
         return ChatResponse(
             success=False,
-            answer="服务暂时不可用，请稍后再试。",
+            answer=friendly_service_error(),
             sources=None,
             error=str(e)
         )
@@ -246,29 +294,24 @@ async def ask(request: ChatRequest):
 
 @router.post("/search", response_model=SearchResponse)
 def search(request: SearchRequest):
-    """
-    检索接口（仅检索，不调用大模型）
-    """
+    """检索接口（仅检索，不调用大模型）。"""
     rag_service = get_rag_service()
 
     if not rag_service.is_ready():
         raise HTTPException(status_code=503, detail="RAG服务未就绪")
 
     result = rag_service.search(request.question, request.n_results)
-
     return SearchResponse(
-        success=result['success'],
-        results=result['results'],
-        total=result['total'],
-        error=result['error']
+        success=result["success"],
+        results=result["results"],
+        total=result["total"],
+        error=result["error"]
     )
 
 
 @router.post("/clear")
 def clear_session(session_id: str):
-    """
-    清空会话历史
-    """
+    """清空会话历史。"""
     llm_service = get_llm_service()
     llm_service.clear_session(session_id)
     return {"success": True, "message": f"会话 {session_id} 已清空"}
@@ -276,7 +319,7 @@ def clear_session(session_id: str):
 
 @router.get("/health")
 def health():
-    """健康检查"""
+    """健康检查。"""
     rag_service = get_rag_service()
     llm_service = get_llm_service()
 
@@ -284,40 +327,50 @@ def health():
         "status": "ok",
         "rag_ready": rag_service.is_ready(),
         "llm_ready": llm_service.is_ready(),
-        "rag_count": rag_service.collection.count() if rag_service.is_ready() else 0
+        "rag_count": rag_service.collection.count() if rag_service.is_ready() else 0,
+        "knowledge_version": "word_rag_20260703_exact_attraction_fallback"
     }
 
 
 @router.get("/session/init")
-async def init_session():
+async def init_session(device_id: Optional[str] = None):
     """
-    分配一个新的 session_id，保证全局唯一且连续递增
-    格式：lingshan_YYYYMMDD_XXXXXX（6位序号）
+    分配一个新的 session_id，保证全局唯一且不会被两台设备同时占用。
+    格式：lingshan_YYYYMMDD_XXXX（4位随机数字）。
     """
     from models.database import SessionLocal
-    from datetime import datetime
     from sqlalchemy import text
 
     db = SessionLocal()
     try:
         today = datetime.now().strftime("%Y%m%d")
-        # 使用事务和行锁保证原子性
-        # 先尝试插入今日记录，如果已存在则忽略
-        db.execute(text("INSERT OR IGNORE INTO session_counter (date, counter) VALUES (:date, 0)"), {"date": today})
-        # 递增计数器并返回新值
-        result = db.execute(
-            text("UPDATE session_counter SET counter = counter + 1 WHERE date = :date RETURNING counter"),
-            {"date": today}
-        ).fetchone()
-        # 如果 SQLite 不支持 RETURNING，改用 SELECT 方式
-        if result is None:
-            # 部分 SQLite 版本不支持 RETURNING，手动查询
-            db.execute(text("UPDATE session_counter SET counter = counter + 1 WHERE date = :date"), {"date": today})
-            result = db.execute(text("SELECT counter FROM session_counter WHERE date = :date"), {"date": today}).fetchone()
-        db.commit()
-        seq = str(result[0]).zfill(6)
-        session_id = f"lingshan_{today}_{seq}"
-        return {"code": 0, "data": {"session_id": session_id}, "msg": "success"}
+        owner = normalize_device_id(device_id)
+        rng = random.SystemRandom()
+
+        for _ in range(10000):
+            suffix = f"{rng.randint(0, 9999):04d}"
+            session_id = f"lingshan_{today}_{suffix}"
+            now = datetime.now()
+            result = db.execute(
+                text(
+                    "INSERT OR IGNORE INTO session_allocations "
+                    "(session_id, device_id, created_at, updated_at) "
+                    "VALUES (:session_id, :device_id, :created_at, :updated_at)"
+                ),
+                {
+                    "session_id": session_id,
+                    "device_id": owner,
+                    "created_at": now,
+                    "updated_at": now
+                }
+            )
+
+            if result.rowcount == 1:
+                db.commit()
+                return {"code": 0, "data": {"session_id": session_id}, "msg": "success"}
+
+        db.rollback()
+        return {"code": 1, "msg": "今日可用会话 ID 已用完，请明天再试", "data": None}
     except Exception as e:
         db.rollback()
         print(f"[session/init] 错误: {e}")

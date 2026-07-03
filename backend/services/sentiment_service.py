@@ -196,9 +196,9 @@ def get_session_sentiment_trajectory(session_id: str) -> Dict[str, Any]:
         density_weighted = density * 100 * 0.6
 
         risk_score = diff_weighted + density_weighted
-        if risk_score >= 60:
+        if risk_score >= 45:
             risk_level = "high"
-        elif risk_score >= 30:
+        elif risk_score >= 20:
             risk_level = "medium"
         else:
             risk_level = "low"

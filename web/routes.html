@@ -733,26 +733,26 @@
         <section class="page-header">
             <div class="page-header-content">
                 <div class="eyebrow">路线推荐 · 灵山胜境</div>
-                <h2>按时间、体力和兴趣，快速匹配今日游览路线</h2>
-                <p>精选经典礼佛、亲子轻松、文化深度和摄影打卡路线，帮助游客在有限时间里更顺畅地完成游览。</p>
+                <h2>把今天的灵山，走成适合你的样子</h2>
+                <p>从经典礼佛、亲子轻松到文化深度与湖景打卡，按你的节奏选择路线。</p>
             </div>
         </section>
 
         <section class="quick-stats">
             <div class="stat-item">
-                <div class="value">4 条</div>
+                <div class="value">6 条</div>
                 <div class="label">推荐路线</div>
             </div>
             <div class="stat-item">
-                <div class="value">2-5h</div>
+                <div class="value">3-6h</div>
                 <div class="label">覆盖时长</div>
             </div>
             <div class="stat-item">
-                <div class="value">6 处</div>
+                <div class="value">15+</div>
                 <div class="label">核心景点</div>
             </div>
             <div class="stat-item">
-                <div class="value">低-中</div>
+                <div class="value">低-高</div>
                 <div class="label">步行强度</div>
             </div>
         </section>
@@ -760,12 +760,18 @@
         <section class="content-grid">
             <div>
                 <div class="toolbar">
-                    <h2 class="section-title">推荐路线</h2>
+                    <div class="toolbar-title">
+                        <h2 class="section-title">推荐路线</h2>
+                        <button class="personal-recommend-btn" id="personalRecommendBtn" type="button">根据个性推荐</button>
+                        <span class="personal-recommend-status" id="personalRecommendStatus" aria-live="polite"></span>
+                    </div>
                     <div class="filter-tabs" aria-label="路线筛选">
                         <button class="active" data-filter="all">全部</button>
-                        <button data-filter="classic">经典</button>
+                        <button data-filter="history">历史</button>
+                        <button data-filter="nature">自然</button>
                         <button data-filter="family">亲子</button>
-                        <button data-filter="culture">文化</button>
+                        <button data-filter="classic">经典</button>
+                        <button data-filter="show">演出</button>
                         <button data-filter="photo">摄影</button>
                     </div>
                 </div>
@@ -778,9 +784,9 @@
                     <div class="map-header">
                         <div>
                             <h3>灵山胜境导览地图</h3>
-                            <p id="mapRouteName">经典一日礼佛线</p>
+                            <p id="mapRouteName">历史文化爱好者路线</p>
                         </div>
-                        <span class="map-pill">路线高亮</span>
+                        <button class="map-expand-btn" id="mapExpandBtn" type="button">放大查看</button>
                     </div>
                     <div class="map-canvas" id="routeMap" aria-label="路线示意地图"></div>
                     <div class="map-legend">
@@ -809,84 +815,129 @@
 
     <script>
         const scenicSpots = {
-            "入口广场": { x: 445, y: 1000, label: "入口广场" },
+            "南门": { x: 445, y: 1000, label: "南门" },
+            "入口广场": { x: 445, y: 960, label: "入口广场" },
+            "灵山大照壁": { x: 445, y: 915, label: "大照壁" },
+            "胜境广场": { x: 420, y: 855, label: "胜境广场" },
+            "佛足坛": { x: 385, y: 810, label: "佛足坛" },
             "九龙灌浴": { x: 305, y: 630, label: "九龙灌浴" },
+            "菩提大道": { x: 360, y: 700, label: "菩提大道" },
+            "佛手广场": { x: 292, y: 540, label: "佛手广场" },
+            "百子戏弥勒": { x: 350, y: 590, label: "百子戏弥勒" },
+            "祥符禅寺": { x: 255, y: 405, label: "祥符禅寺" },
+            "杏坛广场": { x: 245, y: 350, label: "杏坛广场" },
+            "佛前广场": { x: 210, y: 300, label: "佛前广场" },
             "灵山大佛": { x: 205, y: 255, label: "灵山大佛" },
             "梵宫": { x: 735, y: 505, label: "梵宫" },
+            "梵宫广场": { x: 705, y: 565, label: "梵宫广场" },
             "五印坛城": { x: 600, y: 720, label: "五印坛城" },
-            "休憩区": { x: 390, y: 470, label: "休憩区" },
-            "梵宫外景": { x: 690, y: 520, label: "梵宫外景" },
+            "三圣殿": { x: 650, y: 620, label: "三圣殿" },
             "佛博馆": { x: 520, y: 480, label: "佛博馆" },
             "曼飞龙塔": { x: 880, y: 635, label: "曼飞龙塔" },
+            "灵山精舍": { x: 820, y: 760, label: "灵山精舍" },
+            "梵宫外景": { x: 690, y: 520, label: "梵宫外景" },
             "湖畔观景点": { x: 465, y: 760, label: "湖畔观景点" },
             "灵山大佛远景": { x: 120, y: 235, label: "大佛远景" },
-            "出口纪念区": { x: 610, y: 855, label: "出口纪念区" }
+            "出口纪念区": { x: 610, y: 855, label: "出口纪念区" },
+            "出口": { x: 610, y: 900, label: "出口" }
         };
 
         const routes = [
             {
-                id: "classic",
-                type: "classic",
-                badge: "人气最高",
-                title: "经典一日礼佛线",
-                desc: "覆盖灵山胜境代表景观，适合第一次到访、希望完整体验核心景点的游客。",
-                score: 98,
-                distance: "3.5km",
-                duration: "约4小时",
+                id: "history",
+                type: "history",
+                badge: "原始资料",
+                title: "历史文化爱好者路线",
+                desc: "来自原始 Word 资料的 6 小时深度游，串联小灵山历史、祥符禅寺、大佛造像艺术和佛教艺术空间。",
+                score: 99,
+                distance: "约5.2km",
+                duration: "约6小时",
+                intensity: "较高",
+                image: "images/banner-fangong.jpg",
+                tags: ["原始资料路线", "千年古刹", "深度讲解"],
+                path: ["南门", "灵山大照壁", "胜境广场", "佛手广场", "祥符禅寺", "杏坛广场", "佛前广场", "灵山大佛", "梵宫", "五印坛城", "三圣殿", "出口"],
+                mapPath: ["南门", "灵山大照壁", "胜境广场", "佛手广场", "祥符禅寺", "杏坛广场", "佛前广场", "灵山大佛", "梵宫", "五印坛城", "三圣殿", "出口"],
+                notes: ["祥符禅寺重点讲玄奘法师与小灵山渊源", "灵山大佛解析手印、台阶与青铜铸造工艺", "梵宫与五印坛城适合配合讲解慢游"]
+            },
+            {
+                id: "nature",
+                type: "nature",
+                badge: "原始资料",
+                title: "自然风光爱好者路线",
+                desc: "来自原始 Word 资料的 5 小时全景游，突出太湖视角、菩提大道、曼飞龙塔和禅意园林。",
+                score: 96,
+                distance: "约4.2km",
+                duration: "约5小时",
                 intensity: "中等",
                 image: "images/banner-panorama.jpg",
-                tags: ["首次到访", "核心景点", "礼佛祈福"],
-                path: ["入口广场", "灵山大佛", "九龙灌浴", "梵宫", "五印坛城"],
-                mapPath: ["入口广场", "九龙灌浴", "灵山大佛", "梵宫", "五印坛城"],
-                notes: ["大佛区域停留 45 分钟", "九龙灌浴建议卡点观看", "梵宫适合安排较长参观时间"]
+                tags: ["原始资料路线", "太湖风光", "全景慢游"],
+                path: ["南门", "佛足坛", "九龙灌浴", "菩提大道", "灵山大佛", "曼飞龙塔", "灵山精舍", "梵宫广场", "出口"],
+                mapPath: ["南门", "佛足坛", "九龙灌浴", "菩提大道", "灵山大佛", "曼飞龙塔", "灵山精舍", "梵宫广场", "出口"],
+                notes: ["九龙灌浴适合卡点观看并接取祈福圣水", "大佛平台可俯瞰太湖和马山半岛", "灵山精舍适合安排素斋或短暂休憩"]
             },
             {
                 id: "family",
                 type: "family",
-                badge: "轻松省力",
-                title: "亲子轻松游",
-                desc: "缩短步行距离，减少高强度停留，让老人、儿童也能舒适完成主要游览。",
-                score: 92,
-                distance: "2.2km",
-                duration: "约2.5小时",
+                badge: "原始资料",
+                title: "亲子家庭路线",
+                desc: "来自原始 Word 资料的 4 小时轻松游，减少讲解压力，强化动态表演、亲子互动与直观艺术体验。",
+                score: 95,
+                distance: "约3.0km",
+                duration: "约4小时",
                 intensity: "较低",
                 image: "images/banner-jiulong.jpg",
-                tags: ["亲子友好", "节奏舒缓", "少走路"],
-                path: ["入口广场", "九龙灌浴", "灵山大佛", "休憩区", "梵宫外景"],
-                mapPath: ["入口广场", "九龙灌浴", "灵山大佛", "休憩区", "梵宫外景"],
-                notes: ["优先观看动态表演", "中途保留休息时间", "适合半日游或午后到访"]
+                tags: ["原始资料路线", "亲子互动", "节奏轻松"],
+                path: ["南门", "九龙灌浴", "佛手广场", "百子戏弥勒", "梵宫", "五印坛城", "出口"],
+                mapPath: ["南门", "九龙灌浴", "佛手广场", "百子戏弥勒", "梵宫", "五印坛城", "出口"],
+                notes: ["用故事化语言讲述释迦牟尼诞生", "百子戏弥勒适合亲子拍照与互动", "梵宫和五印坛城以色彩、造型等直观元素讲解"]
             },
             {
-                id: "culture",
-                type: "culture",
-                badge: "深度体验",
-                title: "佛教文化深度线",
-                desc: "重点串联佛教艺术与建筑空间，适合对文化、展陈和建筑细节感兴趣的游客。",
-                score: 95,
-                distance: "4.8km",
+                id: "classic",
+                type: "classic",
+                badge: "首次到访",
+                title: "经典核心一日线",
+                desc: "整合常见一日游动线，优先覆盖大佛、九龙灌浴、梵宫与五印坛城等核心景观。",
+                score: 94,
+                distance: "约3.8km",
                 duration: "约5小时",
                 intensity: "中等",
-                image: "images/banner-fangong.jpg",
-                tags: ["文化展陈", "建筑艺术", "深度讲解"],
-                path: ["灵山大佛", "梵宫", "五印坛城", "佛博馆", "曼飞龙塔"],
-                mapPath: ["灵山大佛", "梵宫", "五印坛城", "佛博馆", "曼飞龙塔"],
-                notes: ["建议配合语音讲解", "梵宫与佛博馆预留充足时间", "适合上午入园慢游"]
+                image: "images/banner-dafo.jpg",
+                tags: ["核心景点", "首次到访", "礼佛祈福"],
+                path: ["南门", "九龙灌浴", "佛手广场", "灵山大佛", "梵宫", "五印坛城", "出口"],
+                mapPath: ["南门", "九龙灌浴", "佛手广场", "灵山大佛", "梵宫", "五印坛城", "出口"],
+                notes: ["先看九龙灌浴再上行至大佛区域", "佛手广场可安排摸掌祈福", "梵宫和五印坛城预留较长参观时间"]
+            },
+            {
+                id: "show",
+                type: "show",
+                badge: "卡点演出",
+                title: "演出祈福卡点线",
+                desc: "围绕九龙灌浴与梵宫演出时间组织动线，适合希望把动态表演和祈福体验放在优先级最高的游客。",
+                score: 91,
+                distance: "约3.2km",
+                duration: "约3.5小时",
+                intensity: "中等",
+                image: "images/banner-jiulong.jpg",
+                tags: ["表演优先", "祈福体验", "半日可走"],
+                path: ["南门", "九龙灌浴", "佛手广场", "梵宫", "灵山大佛", "出口纪念区"],
+                mapPath: ["南门", "九龙灌浴", "佛手广场", "梵宫", "灵山大佛", "出口纪念区"],
+                notes: ["九龙灌浴建议提前到达占位", "梵宫演出以当日公告为准", "若时间紧可减少大佛登顶停留"]
             },
             {
                 id: "photo",
                 type: "photo",
                 badge: "出片推荐",
                 title: "湖景摄影打卡线",
-                desc: "围绕开阔湖面、建筑倒影和标志景观取景，适合喜欢拍照留念的游客。",
+                desc: "围绕开阔湖面、建筑外景和标志景观取景，适合喜欢拍照留念、希望少进室内慢拍的游客。",
                 score: 90,
-                distance: "3.0km",
+                distance: "约3.0km",
                 duration: "约3小时",
                 intensity: "较低",
-                image: "images/banner-dafo.jpg",
+                image: "images/banner-panorama.jpg",
                 tags: ["拍照打卡", "湖景视角", "外景为主"],
                 path: ["湖畔观景点", "灵山大佛远景", "梵宫外景", "五印坛城", "出口纪念区"],
                 mapPath: ["湖畔观景点", "灵山大佛远景", "梵宫外景", "五印坛城", "出口纪念区"],
-                notes: ["晴天上午光线更清透", "湖畔适合拍摄倒影", "外景路线更适合轻装游览"]
+                notes: ["晴天上午光线更清透", "湖畔适合拍摄太湖与建筑关系", "外景路线更适合轻装游览"]
             }
         ];
 
@@ -894,11 +945,53 @@
         const detailPanel = document.getElementById("detailPanel");
         const routeMap = document.getElementById("routeMap");
         const mapRouteName = document.getElementById("mapRouteName");
+        const scenicMapCard = document.querySelector(".scenic-map-card");
+        const mapExpandBtn = document.getElementById("mapExpandBtn");
+        const scenicMapOriginalParent = scenicMapCard ? scenicMapCard.parentNode : null;
+        const scenicMapOriginalNextSibling = scenicMapCard ? scenicMapCard.nextSibling : null;
+        const personalRecommendBtn = document.getElementById("personalRecommendBtn");
+        const personalRecommendStatus = document.getElementById("personalRecommendStatus");
         const filterButtons = document.querySelectorAll(".filter-tabs button");
-        let activeRouteId = "classic";
+        const CHAT_HISTORY_KEY = "lingshan_chat_sessions";
+        let activeRouteId = "history";
+        let isMapFullscreen = false;
+        let isPersonalized = false;
+
+        const routePreferenceProfiles = {
+            history: {
+                keywords: ["历史", "文化", "佛教", "讲解", "故事", "玄奘", "祥符禅寺", "古寺", "建筑", "艺术", "梵宫", "五印坛城", "深度", "人文"],
+                soft: ["慢慢", "详细", "知识", "学习", "了解", "寺庙"],
+                penalty: ["不想走太多", "少走", "轻松", "赶时间", "半天"]
+            },
+            nature: {
+                keywords: ["自然", "风景", "风光", "太湖", "湖景", "安静", "散步", "放松", "菩提大道", "曼飞龙塔", "灵山精舍", "素斋", "禅意"],
+                soft: ["慢游", "舒服", "空气", "远眺", "全景"],
+                penalty: ["赶时间", "只看核心", "半天"]
+            },
+            family: {
+                keywords: ["亲子", "孩子", "小孩", "儿童", "老人", "爸妈", "父母", "家庭", "轻松", "少走", "不累", "休息", "推车"],
+                soft: ["互动", "好玩", "拍照", "慢一点", "省力"],
+                penalty: ["深度", "历史", "讲解", "走全程"]
+            },
+            classic: {
+                keywords: ["第一次", "首次", "经典", "必去", "核心", "主要", "大佛", "梵宫", "九龙灌浴", "五印坛城", "一日游", "都看看", "完整"],
+                soft: ["推荐", "热门", "不遗漏", "祈福"],
+                penalty: ["只拍照", "半天", "少走"]
+            },
+            show: {
+                keywords: ["演出", "表演", "九龙灌浴", "卡点", "时间", "几点", "祈福", "仪式", "动态", "音乐", "喷泉"],
+                soft: ["半天", "快一点", "安排", "先看"],
+                penalty: ["安静", "自然", "慢游"]
+            },
+            photo: {
+                keywords: ["拍照", "打卡", "出片", "摄影", "照片", "湖景", "外景", "远景", "好看", "取景", "少进室内"],
+                soft: ["轻装", "朋友圈", "风景", "建筑外观"],
+                penalty: ["讲解", "深度", "完整"]
+            }
+        };
 
         function renderRoutes(filter = "all") {
-            const visibleRoutes = filter === "all" ? routes : routes.filter(route => route.type === filter);
+            const visibleRoutes = getVisibleRoutes(filter);
             routesList.innerHTML = visibleRoutes.map(route => `
                 <article class="route-card ${route.id === activeRouteId ? "active" : ""}" data-id="${route.id}">
                     <div class="route-image" style="background-image: url('${route.image}')">
@@ -910,7 +1003,7 @@
                                 <h3>${route.title}</h3>
                                 <p>${route.desc}</p>
                             </div>
-                            <div class="match-score">${route.score}<span>匹配度</span></div>
+                            ${isPersonalized ? `<div class="match-score">${route.matchScore}<span>匹配度</span></div>` : ""}
                         </div>
                         <div class="route-meta">
                             <span>步行 ${route.distance}</span>
@@ -1030,6 +1123,163 @@
         function getCurrentFilter() {
             const active = document.querySelector(".filter-tabs button.active");
             return active ? active.dataset.filter : "all";
+        }
+
+        function setMapFullscreen(open) {
+            if (!scenicMapCard) return;
+
+            if (open && scenicMapCard.parentNode !== document.body) {
+                document.body.appendChild(scenicMapCard);
+            }
+
+            isMapFullscreen = open;
+            scenicMapCard.classList.toggle("map-fullscreen", open);
+            document.body.classList.toggle("map-fullscreen-open", open);
+            if (mapExpandBtn) {
+                mapExpandBtn.textContent = open ? "退出全屏" : "放大查看";
+            }
+
+            if (!open && scenicMapOriginalParent && scenicMapCard.parentNode === document.body) {
+                scenicMapOriginalParent.insertBefore(scenicMapCard, scenicMapOriginalNextSibling);
+            }
+        }
+
+        function getVisibleRoutes(filter = "all") {
+            const visibleRoutes = filter === "all" ? routes : routes.filter(route => route.type === filter);
+            if (!isPersonalized) return visibleRoutes;
+            return [...visibleRoutes].sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+        }
+
+        function setPersonalRecommendStatus(text, type = "") {
+            if (!personalRecommendStatus) return;
+            personalRecommendStatus.textContent = text;
+            personalRecommendStatus.classList.toggle("warn", type === "warn");
+            personalRecommendStatus.classList.toggle("success", type === "success");
+        }
+
+        function readStoredChatSessions() {
+            try {
+                return JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "{}") || {};
+            } catch (err) {
+                return {};
+            }
+        }
+
+        function getCurrentConversation() {
+            const sessions = readStoredChatSessions();
+            const currentSessionId = localStorage.getItem("sessionId");
+            const currentSession = currentSessionId ? sessions[currentSessionId] : null;
+            if (currentSession && Array.isArray(currentSession.messages) && currentSession.messages.length) {
+                return currentSession;
+            }
+            return null;
+        }
+
+        function countKeywordHits(text, words, weight = 1) {
+            return words.reduce((total, word) => {
+                if (!word) return total;
+                const matches = text.match(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"));
+                return total + (matches ? matches.length * weight : 0);
+            }, 0);
+        }
+
+        function calculateRouteScores(conversation) {
+            const userMessages = conversation.messages.filter(message => message.role === "user");
+            const sourceMessages = userMessages.length ? userMessages : conversation.messages;
+            const text = sourceMessages.map(message => message.content).join(" ");
+            const shortTrip = /半天|2小时|两小时|3小时|三小时|赶时间|时间紧|快一点|快速|上午|下午/.test(text);
+            const longTrip = /一整天|一天|6小时|六小时|深度|慢慢|慢游|详细|全程/.test(text);
+            const easyTrip = /轻松|不累|少走|老人|小孩|孩子|亲子|休息|省力|推车/.test(text);
+            const firstVisit = /第一次|首次|第一次来|必去|经典|主要|核心|都看看/.test(text);
+
+            const rawScores = routes.map((route, index) => {
+                const profile = routePreferenceProfiles[route.id] || { keywords: [], soft: [], penalty: [] };
+                let score = 62 + index;
+                score += countKeywordHits(text, profile.keywords, 7);
+                score += countKeywordHits(text, profile.soft, 4);
+                score -= countKeywordHits(text, profile.penalty, 5);
+                score += countKeywordHits(text, route.path, 2);
+                score += countKeywordHits(text, route.tags, 2);
+
+                if (shortTrip) {
+                    if (["show", "photo", "family"].includes(route.id)) score += 10;
+                    if (["history", "nature"].includes(route.id)) score -= 8;
+                }
+                if (longTrip) {
+                    if (["history", "nature", "classic"].includes(route.id)) score += 10;
+                    if (["show", "photo"].includes(route.id)) score -= 5;
+                }
+                if (easyTrip) {
+                    if (["family", "photo"].includes(route.id)) score += 12;
+                    if (route.intensity === "较高") score -= 12;
+                    if (route.intensity === "中等") score -= 3;
+                }
+                if (firstVisit) {
+                    if (route.id === "classic") score += 14;
+                    if (["history", "nature"].includes(route.id)) score += 4;
+                }
+
+                return { id: route.id, raw: score };
+            });
+
+            const min = Math.min(...rawScores.map(item => item.raw));
+            const max = Math.max(...rawScores.map(item => item.raw));
+            const spread = Math.max(1, max - min);
+            return rawScores.reduce((scores, item) => {
+                scores[item.id] = Math.max(70, Math.min(98, Math.round(74 + ((item.raw - min) / spread) * 24)));
+                return scores;
+            }, {});
+        }
+
+        function applyPersonalRecommendation() {
+            const conversation = getCurrentConversation();
+            if (!conversation) {
+                isPersonalized = false;
+                routes.forEach(route => {
+                    delete route.matchScore;
+                });
+                setPersonalRecommendStatus("请先跟小灵讲述你的旅游需求", "warn");
+                renderRoutes(getCurrentFilter());
+                renderDetail();
+                return;
+            }
+
+            const scores = calculateRouteScores(conversation);
+            routes.forEach(route => {
+                route.matchScore = scores[route.id];
+            });
+            isPersonalized = true;
+            const bestRoute = [...routes].sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))[0];
+            if (bestRoute) activeRouteId = bestRoute.id;
+            renderRoutes(getCurrentFilter());
+            renderDetail();
+            setPersonalRecommendStatus(`已根据会话 ${conversation.sessionId} 更新`, "success");
+        }
+
+        if (scenicMapCard) {
+            scenicMapCard.addEventListener("click", (event) => {
+                if (event.target.closest("button")) return;
+                if (!isMapFullscreen) {
+                    setMapFullscreen(true);
+                }
+            });
+        }
+
+        if (mapExpandBtn) {
+            mapExpandBtn.addEventListener("click", (event) => {
+                event.stopPropagation();
+                setMapFullscreen(!isMapFullscreen);
+            });
+        }
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && isMapFullscreen) {
+                setMapFullscreen(false);
+            }
+        });
+
+        if (personalRecommendBtn) {
+            personalRecommendBtn.addEventListener("click", applyPersonalRecommendation);
         }
 
         filterButtons.forEach(button => {

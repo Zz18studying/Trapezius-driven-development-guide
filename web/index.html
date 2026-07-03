@@ -716,8 +716,8 @@
                 欢迎来到灵山胜境
                 <small>· 国家5A级景区</small>
             </div>
-            <div class="weather">
-                晴 28°C  ·  适宜出游
+            <div class="weather" id="weatherWidget" aria-live="polite" title="灵山胜境今日天气">
+                今日天气获取中...
             </div>
         </div>
 
@@ -799,7 +799,7 @@
         <div class="spots-grid">
             <a class="spot-card" href="javascript:void(0)" onclick="location.href='spots.html'">
                 <div class="spot-img" style="background-image: url('images/banner-dafo.jpg');">
-                    <span class="rating">评分 4.9</span>
+                    <span class="rating" data-spot-id="1">评分 4.9</span>
                 </div>
                 <div class="spot-info">
                     <h3>灵山大佛</h3>
@@ -812,7 +812,7 @@
             </a>
             <a class="spot-card" href="javascript:void(0)" onclick="location.href='spots.html'">
                 <div class="spot-img" style="background-image: url('images/banner-jiulong.jpg');">
-                    <span class="rating">评分 4.8</span>
+                    <span class="rating" data-spot-id="2">评分 4.8</span>
                 </div>
                 <div class="spot-info">
                     <h3>九龙灌浴</h3>
@@ -825,7 +825,7 @@
             </a>
             <a class="spot-card" href="javascript:void(0)" onclick="location.href='spots.html'">
                 <div class="spot-img" style="background-image: url('images/banner-fangong.jpg');">
-                    <span class="rating">评分 4.7</span>
+                    <span class="rating" data-spot-id="3">评分 4.7</span>
                 </div>
                 <div class="spot-info">
                     <h3>梵宫</h3>
@@ -838,7 +838,7 @@
             </a>
             <a class="spot-card" href="javascript:void(0)" onclick="location.href='spots.html'">
                 <div class="spot-img" style="background-image: url('images/card-wuyin.jpg');">
-                    <span class="rating">评分 4.6</span>
+                    <span class="rating" data-spot-id="4">评分 4.6</span>
                 </div>
                 <div class="spot-info">
                     <h3>五印坛城</h3>
@@ -857,49 +857,49 @@
             <span class="more" onclick="location.href='routes.html'">查看全部</span>
         </div>
         <div class="routes-grid">
-            <div class="route-card" style="border-left-color: #e67e22;" onclick="location.href='routes.html'">
+            <div class="route-card" style="border-left-color: #1565c0;" onclick="location.href='routes.html'">
                 <div class="route-header">
-                    <span class="route-icon">TOP</span>
-                    <span class="route-tag popular">人气推荐</span>
+                    <span class="route-icon">HIS</span>
+                    <span class="route-tag leisure">资料路线</span>
                 </div>
-                <h4>经典一日游</h4>
+                <h4>历史文化爱好者路线</h4>
                 <div class="route-path">
-                    大佛 <span class="arrow">→</span> 九龙灌浴 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 五印坛城
+                    南门 <span class="arrow">→</span> 祥符禅寺 <span class="arrow">→</span> 灵山大佛 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 五印坛城
                 </div>
                 <div class="route-meta">
-                    <span>步行 3.5km</span>
-                    <span>约4小时</span>
-                    <span>精华全览</span>
+                    <span>约6小时</span>
+                    <span>深度讲解</span>
+                    <span>历史文化</span>
                 </div>
             </div>
             <div class="route-card" style="border-left-color: #2e7d32;" onclick="location.href='routes.html'">
                 <div class="route-header">
-                    <span class="route-icon">FAM</span>
-                    <span class="route-tag fast">轻松休闲</span>
+                    <span class="route-icon">NAT</span>
+                    <span class="route-tag fast">资料路线</span>
                 </div>
-                <h4>亲子休闲游</h4>
+                <h4>自然风光爱好者路线</h4>
                 <div class="route-path">
-                    大佛 <span class="arrow">→</span> 九龙灌浴 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 曼飞龙塔
+                    佛足坛 <span class="arrow">→</span> 九龙灌浴 <span class="arrow">→</span> 菩提大道 <span class="arrow">→</span> 灵山大佛 <span class="arrow">→</span> 灵山精舍
                 </div>
                 <div class="route-meta">
-                    <span>步行 2km</span>
-                    <span>约3小时</span>
-                    <span>轻松游览</span>
+                    <span>约5小时</span>
+                    <span>太湖风光</span>
+                    <span>全景慢游</span>
                 </div>
             </div>
-            <div class="route-card" style="border-left-color: #1565c0;" onclick="location.href='routes.html'">
+            <div class="route-card" style="border-left-color: #e67e22;" onclick="location.href='routes.html'">
                 <div class="route-header">
-                    <span class="route-icon">CUL</span>
-                    <span class="route-tag leisure">深度体验</span>
+                    <span class="route-icon">FAM</span>
+                    <span class="route-tag popular">资料路线</span>
                 </div>
-                <h4>文化深度游</h4>
+                <h4>亲子家庭路线</h4>
                 <div class="route-path">
-                    大佛 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 五印坛城 <span class="arrow">→</span> 曼飞龙塔 <span class="arrow">→</span> 佛博馆
+                    九龙灌浴 <span class="arrow">→</span> 佛手广场 <span class="arrow">→</span> 百子戏弥勒 <span class="arrow">→</span> 梵宫 <span class="arrow">→</span> 五印坛城
                 </div>
                 <div class="route-meta">
-                    <span>步行 5km</span>
-                    <span>约6小时</span>
-                    <span>深度文化</span>
+                    <span>约4小时</span>
+                    <span>亲子互动</span>
+                    <span>轻松游览</span>
                 </div>
             </div>
         </div>
@@ -947,6 +947,156 @@
         });
 
         // ============================================================
+        // 当天天气展示（灵山胜境/无锡滨湖区）
+        // ============================================================
+        function formatHomeSpotRating(summary) {
+            const count = Number(summary && summary.count) || 0;
+            const average = Number(summary && summary.average) || 0;
+            return count > 0 ? `评分 ${average.toFixed(1)}` : '评分 暂无评分';
+        }
+
+        async function loadHomeSpotRatings() {
+            try {
+                const res = await fetch('/api/spots/ratings');
+                const data = await res.json();
+                if (data.code !== 0 || !data.data) return;
+
+                document.querySelectorAll('.spot-img .rating[data-spot-id]').forEach((el) => {
+                    const summary = data.data[String(el.dataset.spotId)] || { count: 0, average: 0 };
+                    el.textContent = formatHomeSpotRating(summary);
+                });
+            } catch (err) {
+                console.warn('Home spot rating API unavailable:', err);
+            }
+        }
+
+        const weatherWidget = document.getElementById('weatherWidget');
+        const LINGSHAN_WEATHER = {
+            latitude: 31.43,
+            longitude: 120.09,
+            cacheKey: 'lingshan_today_weather',
+            cacheMinutes: 20
+        };
+
+        function getWeatherText(code) {
+            const weatherMap = {
+                0: '晴',
+                1: '大部晴朗',
+                2: '多云',
+                3: '阴',
+                45: '有雾',
+                48: '雾凇',
+                51: '小毛毛雨',
+                53: '毛毛雨',
+                55: '较强毛毛雨',
+                56: '冻毛毛雨',
+                57: '强冻毛毛雨',
+                61: '小雨',
+                63: '中雨',
+                65: '大雨',
+                66: '冻雨',
+                67: '强冻雨',
+                71: '小雪',
+                73: '中雪',
+                75: '大雪',
+                77: '雪粒',
+                80: '阵雨',
+                81: '较强阵雨',
+                82: '强阵雨',
+                85: '阵雪',
+                86: '强阵雪',
+                95: '雷雨',
+                96: '雷雨伴冰雹',
+                99: '强雷雨伴冰雹'
+            };
+            return weatherMap[code] || '天气更新中';
+        }
+
+        function getTravelAdvice(weatherCode, precipitationProbability, windSpeed, temperature) {
+            if ([61, 63, 65, 80, 81, 82, 95, 96, 99].includes(weatherCode) || precipitationProbability >= 60) {
+                return '建议带伞';
+            }
+            if (temperature >= 32) {
+                return '注意防晒补水';
+            }
+            if (temperature <= 5) {
+                return '注意保暖';
+            }
+            if (windSpeed >= 28) {
+                return '注意防风';
+            }
+            return '适宜出游';
+        }
+
+        function formatWeather(data) {
+            const current = data.current || {};
+            const daily = data.daily || {};
+            const weatherText = getWeatherText(current.weather_code);
+            const temperature = Math.round(current.temperature_2m);
+            const high = Math.round((daily.temperature_2m_max || [])[0]);
+            const low = Math.round((daily.temperature_2m_min || [])[0]);
+            const rainProbability = Math.round((daily.precipitation_probability_max || [0])[0] || 0);
+            const windSpeed = Math.round(current.wind_speed_10m || 0);
+            const advice = getTravelAdvice(current.weather_code, rainProbability, windSpeed, temperature);
+
+            if (Number.isNaN(temperature) || Number.isNaN(high) || Number.isNaN(low)) {
+                return '今日天气暂未更新';
+            }
+            return `今日 ${weatherText} ${temperature}°C · ${low}-${high}°C · ${advice}`;
+        }
+
+        function readCachedWeather() {
+            try {
+                const cached = JSON.parse(localStorage.getItem(LINGSHAN_WEATHER.cacheKey) || 'null');
+                if (!cached || !cached.text || !cached.updatedAt) return '';
+                const age = Date.now() - cached.updatedAt;
+                if (age > LINGSHAN_WEATHER.cacheMinutes * 60 * 1000) return '';
+                return cached.text;
+            } catch (err) {
+                return '';
+            }
+        }
+
+        function writeCachedWeather(text) {
+            localStorage.setItem(
+                LINGSHAN_WEATHER.cacheKey,
+                JSON.stringify({ text, updatedAt: Date.now() })
+            );
+        }
+
+        async function loadTodayWeather() {
+            const cachedText = readCachedWeather();
+            if (cachedText) {
+                weatherWidget.textContent = cachedText;
+            }
+
+            const params = new URLSearchParams({
+                latitude: LINGSHAN_WEATHER.latitude,
+                longitude: LINGSHAN_WEATHER.longitude,
+                current: 'temperature_2m,weather_code,wind_speed_10m,precipitation',
+                daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+                timezone: 'Asia/Shanghai',
+                forecast_days: '1'
+            });
+
+            try {
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, {
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error(`weather status ${response.status}`);
+                const data = await response.json();
+                const weatherText = formatWeather(data);
+                weatherWidget.textContent = weatherText;
+                writeCachedWeather(weatherText);
+            } catch (err) {
+                console.warn('今日天气获取失败:', err);
+                if (!cachedText) {
+                    weatherWidget.textContent = '今日天气暂未更新 · 建议出行前查看当地天气';
+                }
+            }
+        }
+
+        // ============================================================
         // 首页数字人预览（小尺寸）
         // ============================================================
         const previewContainer = document.getElementById('previewContainer');
@@ -965,7 +1115,7 @@
                     view: previewCanvas,
                     width: width,
                     height: height,
-                    backgroundColor: 0xdceef7,
+                    backgroundColor: 0xeef8fa,
                     resolution: window.devicePixelRatio || 1,
                     autoDensity: true
                 });
@@ -976,8 +1126,9 @@
 
                 previewModel.anchor.set(0.5, 0.5);
                 previewModel.x = previewApp.screen.width / 2;
-                previewModel.y = previewApp.screen.height / 2 + 5;
-                previewModel.scale.set(0.10, 0.10);
+                previewModel.y = previewApp.screen.height * 0.50;
+                const previewInitialScale = Math.min(width, height) / 1000;
+                previewModel.scale.set(previewInitialScale * 0.24, previewInitialScale * 0.24);
 
                 // 待机表情（简版）
                 let idleTimer = null;
@@ -1025,9 +1176,9 @@
                     const h = previewContainer.clientHeight || 180;
                     previewApp.renderer.resize(w, h);
                     previewModel.x = previewApp.screen.width / 2;
-                    previewModel.y = previewApp.screen.height / 2 + 5;
+                    previewModel.y = previewApp.screen.height * 0.50;
                     const scale = Math.min(w, h) / 1000;
-                    previewModel.scale.set(scale * 0.12, scale * 0.12);
+                    previewModel.scale.set(scale * 0.24, scale * 0.24);
                 });
 
                 previewStatus.textContent = '已就绪';
@@ -1038,6 +1189,9 @@
                 previewStatus.textContent = '加载失败';
             }
         }
+
+        loadHomeSpotRatings();
+        loadTodayWeather();
 
         // 延迟加载，避免影响主页面渲染
         setTimeout(initPreview, 500);

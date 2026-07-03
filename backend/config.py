@@ -42,7 +42,7 @@ MIN_CONSISTENCY_SCORE = 0.8
 REQUIRE_VERIFICATION = False
 
 # ==================== 检索配置 ====================
-DEFAULT_N_RESULTS = 5
+DEFAULT_N_RESULTS = 3
 MAX_N_RESULTS = 10
 MIN_SIMILARITY = 0.35# 采用更严谨的阈值
 FALLBACK_SIMILARITY = 0.25  # 宽松重试阈值，当标准阈值无结果时使用

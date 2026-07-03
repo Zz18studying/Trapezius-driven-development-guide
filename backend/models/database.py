@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, JSON, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -38,6 +38,41 @@ class Conversation(Base):
     response_time = Column(Float, default=0.0)
     sentiment = Column(String(20), nullable=True)  # positive, neutral, negative
     created_at = Column(DateTime, default=datetime.now)
+
+
+class SessionCounter(Base):
+    """每日会话号计数器"""
+    __tablename__ = "session_counter"
+
+    date = Column(String(8), primary_key=True, index=True)
+    counter = Column(Integer, default=0)
+
+
+class SessionAllocation(Base):
+    """会话 ID 与浏览器设备的占用关系"""
+    __tablename__ = "session_allocations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(100), unique=True, index=True)
+    device_id = Column(String(100), index=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class SpotReview(Base):
+    """景点评价表"""
+    __tablename__ = "spot_reviews"
+    __table_args__ = (
+        UniqueConstraint("spot_id", "session_id", name="uq_spot_review_session"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    spot_id = Column(Integer, index=True)
+    session_id = Column(String(100), index=True)
+    rating = Column(Integer)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class HotTopicCache(Base):
