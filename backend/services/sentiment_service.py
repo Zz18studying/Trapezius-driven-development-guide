@@ -53,9 +53,11 @@ def analyze_sentiment_llm(text: str) -> str:
         print("[情感分析] 未找到 DEEPSEEK_API_KEY，降级到静态")
         return analyze_sentiment_static(text)
 
+
+    print("[情感分析] 使用模型: deepseek-v4-flash") 
     url = "https://api.deepseek.com/v1/chat/completions"
     data = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [
             {"role": "system", "content": "你是一个情感分析助手。请分析用户对景区的评价，只输出一个词：positive（正面）、neutral（中性）或 negative（负面）。"},
             {"role": "user", "content": text}
@@ -382,7 +384,7 @@ def generate_advanced_report(days: int = 7) -> Dict[str, Any]:
     else:
         url = "https://api.deepseek.com/v1/chat/completions"
         data = {
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
             "messages": [
                 {"role": "system", "content": "你是一个景区管理专家，请根据数据生成专业报告。"},
                 {"role": "user", "content": prompt}

@@ -10,6 +10,8 @@ from openai import OpenAI
 from models.database import SessionLocal, Conversation, HotTopicCache
 from sqlalchemy import func, or_
 
+STORAGE_FILE = "/var/www/Trapezius-driven-development-guide/backend/.last_topic_update.txt"
+
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 if not DEEPSEEK_API_KEY:
     print("⚠️ 警告: DEEPSEEK_API_KEY 未设置，将直接使用关键词匹配")
@@ -22,25 +24,26 @@ client = OpenAI(
 
 def get_last_processed_time():
     try:
-        with open("/tmp/last_topic_update.txt", "r") as f:
+        with open(STORAGE_FILE, "r") as f:
             return datetime.fromisoformat(f.read().strip())
     except (FileNotFoundError, ValueError):
         return datetime.now() - timedelta(days=30)
 
 
 def save_last_processed_time(dt):
-    with open("/tmp/last_topic_update.txt", "w") as f:
+    with open(STORAGE_FILE, "w") as f:
         f.write(dt.isoformat())
 
 
 async def classify_with_llm(questions: list) -> list:
     if not questions or not DEEPSEEK_API_KEY:
         return []
+    print("[话题聚类] 使用模型: deepseek-v4-flash")
     predefined_categories = [
         "开放时间", "门票价格", "交通路线", "景点介绍",
         "祈福体验", "游览建议", "历史故事", "餐饮住宿"
     ]
-    sample = questions[:200]
+    sample = questions[:200]  # 每批最多200条，LLM 会返回聚合计数
     prompt = f"""
 你是一个数据分析专家，请对以下游客提问进行话题归类。
 【固定话题类别】{json.dumps(predefined_categories, ensure_ascii=False)}
@@ -58,7 +61,7 @@ async def classify_with_llm(questions: list) -> list:
 """
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             messages=[
                 {"role": "system", "content": "你是一个数据分析专家，只输出JSON，不要有任何额外文字。"},
                 {"role": "user", "content": prompt}
@@ -92,8 +95,11 @@ async def simple_group(questions: list) -> list:
         "餐饮住宿": ["吃", "住", "餐厅", "酒店", "素斋", "素食", "住宿", "餐饮", "美食", "旅馆", "好吃的", "吃饭", "住宿推荐"]
     }
     topic_scores = {topic: 0 for topic in topic_keywords}
+    matched_count = 0
+
     for q in questions:
         q_lower = q.lower()
+        matched = False
         for topic, keywords in topic_keywords.items():
             score = 0
             for kw in keywords:
@@ -101,8 +107,18 @@ async def simple_group(questions: list) -> list:
                     score += 1
             if score > 0:
                 topic_scores[topic] += score
+                matched = True
+        if matched:
+            matched_count += 1
+
+    # 将未匹配的问题全部归入“其他”
+    other_count = len(questions) - matched_count
+    if other_count > 0:
+        topic_scores["其他"] = topic_scores.get("其他", 0) + other_count
+
     if sum(topic_scores.values()) == 0:
         return [{"topic": "其他", "count": len(questions)}]
+
     sorted_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)[:10]
     return [{"topic": t[0], "count": t[1]} for t in sorted_topics if t[1] > 0]
 
@@ -119,20 +135,45 @@ async def update_hot_topics_cache():
         print(f"[话题缓存] 获取到 {len(questions)} 个新问题")
     finally:
         db.close()
+
     if not questions:
         await clean_old_data()
         return
-    topics = await classify_with_llm(questions[:200])
-    if not topics:
-        topics = await simple_group(questions)
-    if not topics:
-        return
-    today = now.strftime("%Y-%m-%d")
-    db = SessionLocal()
-    try:
+
+    all_topics = {}
+    batch_size = 200
+
+    for i in range(0, len(questions), batch_size):
+        batch = questions[i:i+batch_size]
+        print(f"[话题缓存] 处理第 {i//batch_size + 1} 批，共 {len(batch)} 条")
+
+        topics = await classify_with_llm(batch)
+        if topics:
+            # 检查 LLM 返回的总计数是否等于批次大小
+            total_llm_count = sum(item['count'] for item in topics)
+            if total_llm_count < len(batch):
+                # 补充缺失的部分为“其他”
+                topics.append({"topic": "其他", "count": len(batch) - total_llm_count})
+        else:
+            topics = await simple_group(batch)
+
+        if not topics:
+            continue
+
         for item in topics:
             topic = item["topic"]
             count = item["count"]
+            all_topics[topic] = all_topics.get(topic, 0) + count
+
+    if not all_topics:
+        print("[话题缓存] 无分类结果")
+        return
+
+    # 保存到数据库
+    today = now.strftime("%Y-%m-%d")
+    db = SessionLocal()
+    try:
+        for topic, count in all_topics.items():
             record = db.query(HotTopicCache).filter(
                 HotTopicCache.topic == topic,
                 HotTopicCache.date == today
@@ -144,16 +185,20 @@ async def update_hot_topics_cache():
                     topic=topic,
                     count=count,
                     date=today,
-                    keywords=json.dumps(item.get("keywords", []), ensure_ascii=False)
+                    keywords=json.dumps([], ensure_ascii=False)
                 )
                 db.add(new_record)
         db.commit()
-        print(f"[话题缓存] 累加完成")
+        total = db.query(func.sum(HotTopicCache.count)).filter(
+            HotTopicCache.date == today
+        ).scalar() or 0
+        print(f"[话题缓存] 累加完成，今日总计: {total}")
     except Exception as e:
         print(f"[话题缓存] 累加失败: {e}")
         db.rollback()
     finally:
         db.close()
+
     await clean_old_data()
     save_last_processed_time(now)
 
@@ -173,9 +218,6 @@ async def clean_old_data():
         db.close()
 
 
-# ============================================================
-# 关键改动：统计提及次数（不去重）
-# ============================================================
 async def get_cached_topics(limit: int = 10) -> list:
     """
     查询热门话题（提及次数统计，按关键词匹配累计）
@@ -184,7 +226,6 @@ async def get_cached_topics(limit: int = 10) -> list:
     cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     db = SessionLocal()
     try:
-        # 直接从 HotTopicCache 查询累加计数（这就是提及次数）
         results = db.query(
             HotTopicCache.topic,
             func.sum(HotTopicCache.count).label("total_count")
@@ -192,7 +233,6 @@ async def get_cached_topics(limit: int = 10) -> list:
             HotTopicCache.topic
         ).order_by(func.sum(HotTopicCache.count).desc()).limit(limit).all()
 
-        # 如果缓存表无数据，则直接从 Conversation 统计（降级）
         if not results:
             print("[话题缓存] 缓存表无数据，直接从对话表统计提及次数")
             topic_keywords = {
@@ -205,9 +245,6 @@ async def get_cached_topics(limit: int = 10) -> list:
                 "历史故事": ["历史", "故事", "由来", "传说", "典故", "文化", "渊源", "千年", "古代", "名人"],
                 "餐饮住宿": ["吃", "住", "餐厅", "酒店", "素斋", "素食", "住宿", "餐饮", "美食", "旅馆", "好吃的", "吃饭", "住宿推荐"]
             }
-            # 统计每个话题的提及次数（累加匹配到的关键词数）
-            result_list = []
-            # 获取所有对话问题
             questions = db.query(Conversation.user_question).filter(
                 Conversation.created_at >= cutoff,
                 Conversation.user_question.isnot(None)
@@ -215,7 +252,6 @@ async def get_cached_topics(limit: int = 10) -> list:
             questions = [q[0] for q in questions]
             if not questions:
                 return []
-            # 按话题统计提及次数
             topic_mentions = {topic: 0 for topic in topic_keywords}
             for q in questions:
                 q_lower = q.lower()
@@ -223,7 +259,6 @@ async def get_cached_topics(limit: int = 10) -> list:
                     for kw in keywords:
                         if kw in q_lower:
                             topic_mentions[topic] += 1
-            # 排序取top
             sorted_topics = sorted(topic_mentions.items(), key=lambda x: x[1], reverse=True)[:limit]
             return [{"topic": t[0], "count": t[1]} for t in sorted_topics if t[1] > 0]
         else:

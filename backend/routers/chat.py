@@ -31,7 +31,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     device_id: Optional[str] = None
     use_rag: Optional[bool] = True
-    n_results: Optional[int] = 3
+    n_results: Optional[int] = 5
     verify: Optional[bool] = True
 
 
@@ -55,23 +55,8 @@ class SearchResponse(BaseModel):
 
 
 def filter_sources_by_attraction(sources: List[dict], question: str) -> List[dict]:
-    """当用户明确提到景点时，优先保留该景点相关来源。"""
-    attraction_name = extract_attraction_name(question)
-    if not sources or not attraction_name:
-        return sources
-
-    matched = [
-        source for source in sources
-        if (
-            source.get("attraction_name") == attraction_name
-            or attraction_name in source.get("question", "")
-        )
-    ]
-    if matched:
-        print(f"[API] 景点过滤: 保留 {len(matched)} 条匹配 '{attraction_name}' 的结果")
-        return matched
-    print(f"[API] 景点过滤: 未找到 '{attraction_name}' 的匹配来源，丢弃无关结果")
-    return []
+    """完全禁用景点过滤，避免非景区内容被丢弃。"""
+    return sources
 
 
 def persist_conversation(session_id: str, question: str, answer: str, sources: List[dict], started_at: float):
@@ -220,7 +205,7 @@ async def ask(request: ChatRequest):
             print(f"[API] RAG检索耗时: {time.time() - rag_start:.2f}秒")
 
             if search_result["success"] and search_result["results"]:
-                sources = filter_sources_by_attraction(search_result["results"], resolved_question)
+                sources = search_result["results"]
                 context = rag_service.build_context(sources, request.n_results)
 
         if needs_knowledge and not context:
@@ -294,12 +279,9 @@ async def ask(request: ChatRequest):
 
 @router.post("/search", response_model=SearchResponse)
 def search(request: SearchRequest):
-    """检索接口（仅检索，不调用大模型）。"""
     rag_service = get_rag_service()
-
     if not rag_service.is_ready():
         raise HTTPException(status_code=503, detail="RAG服务未就绪")
-
     result = rag_service.search(request.question, request.n_results)
     return SearchResponse(
         success=result["success"],
@@ -311,7 +293,6 @@ def search(request: SearchRequest):
 
 @router.post("/clear")
 def clear_session(session_id: str):
-    """清空会话历史。"""
     llm_service = get_llm_service()
     llm_service.clear_session(session_id)
     return {"success": True, "message": f"会话 {session_id} 已清空"}
@@ -319,10 +300,8 @@ def clear_session(session_id: str):
 
 @router.get("/health")
 def health():
-    """健康检查。"""
     rag_service = get_rag_service()
     llm_service = get_llm_service()
-
     return {
         "status": "ok",
         "rag_ready": rag_service.is_ready(),
@@ -334,10 +313,6 @@ def health():
 
 @router.get("/session/init")
 async def init_session(device_id: Optional[str] = None):
-    """
-    分配一个新的 session_id，保证全局唯一且不会被两台设备同时占用。
-    格式：lingshan_YYYYMMDD_XXXX（4位随机数字）。
-    """
     from models.database import SessionLocal
     from sqlalchemy import text
 

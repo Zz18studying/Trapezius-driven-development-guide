@@ -102,24 +102,27 @@ class RAGService:
         return detect_intents(query)
 
     def _expand_question(self, query: str) -> list:
-        """生成少量高价值检索变体，避免过度扩展带来噪声。"""
+        """生成检索变体。如果无景点名，则不扩展，只返回原问题。"""
         queries = [query.strip()]
         name = extract_attraction_name(query)
+        # 如果没有景点名，不进行扩展，避免语义漂移
+        if not name:
+            return queries
+
         intents = self._detect_intents(query)
 
-        if name:
-            templates = {
-                "time": f"{name} 开放时间 营业时间",
-                "price": f"{name} 门票 票价 价格",
-                "route": f"{name} 怎么去 交通 路线",
-                "feature": f"{name} 特色 看点 亮点",
-                "size": f"{name} 高度 尺寸 面积",
-                "performance": f"{name} 演出 表演 场次 时间",
-            }
-            for intent in intents:
-                if intent in templates:
-                    queries.append(templates[intent])
-            queries.append(name)
+        templates = {
+            "time": f"{name} 开放时间 营业时间",
+            "price": f"{name} 门票 票价 价格",
+            "route": f"{name} 怎么去 交通 路线",
+            "feature": f"{name} 特色 看点 亮点",
+            "size": f"{name} 高度 尺寸 面积",
+            "performance": f"{name} 演出 表演 场次 时间",
+        }
+        for intent in intents:
+            if intent in templates:
+                queries.append(templates[intent])
+        queries.append(name)
 
         if "price" in intents:
             queries.extend(["灵山胜境门票多少钱", "票务价格 成人票 半价票 免票 观光车"])
@@ -165,6 +168,11 @@ class RAGService:
         if n_results is None:
             n_results = config.DEFAULT_N_RESULTS
         n_results = max(1, min(n_results, config.MAX_N_RESULTS))
+
+        # 非景点问题：增大召回数，避免漏掉
+        attraction_name = extract_attraction_name(query)
+        if not attraction_name:
+            n_results = max(n_results, 15)
 
         try:
             start = time.time()
@@ -273,16 +281,14 @@ class RAGService:
         return candidates
 
     def build_context(self, sources: list, n_results: int = 3) -> str:
-        """构建上下文，当 question 为空时使用 doc 字段作为备用。"""
+        """构建上下文，全部 sources 都使用。"""
         context_parts = []
-        max_items = min(n_results or 3, 3)
-        for i, item in enumerate(sources[:max_items], 1):
-            # 如果 question 为空，使用 doc 字段作为问题内容
+        for i, item in enumerate(sources, 1):
             question_text = item.get("question", "") or item.get("doc", "") or "相关资料"
             answer = self._trim_context_text(item.get("answer", ""), 520)
             context_parts.append(
                 f"【参考{i}】\n"
-                f"景点：{item.get('attraction_name', '')}\n"
+                f"景点：{item.get('attraction_name', '通用')}\n"
                 f"来源：{item.get('source', '')}\n"
                 f"问题：{question_text}\n"
                 f"答案：{answer}"

@@ -868,7 +868,7 @@
             fetch('/api/voice/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text, voice_type: 0 })
+                    body: JSON.stringify({ text: text, voice_type: 103 })
                 })
                 .then(res => res.json())
                 .then(data => {

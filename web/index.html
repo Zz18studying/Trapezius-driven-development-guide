@@ -1126,7 +1126,7 @@
 
                 previewModel.anchor.set(0.5, 0.5);
                 previewModel.x = previewApp.screen.width / 2;
-                previewModel.y = previewApp.screen.height * 0.50;
+                previewModel.y = previewApp.screen.height * 0.44;
                 const previewInitialScale = Math.min(width, height) / 1000;
                 previewModel.scale.set(previewInitialScale * 0.24, previewInitialScale * 0.24);
 
@@ -1176,7 +1176,7 @@
                     const h = previewContainer.clientHeight || 180;
                     previewApp.renderer.resize(w, h);
                     previewModel.x = previewApp.screen.width / 2;
-                    previewModel.y = previewApp.screen.height * 0.50;
+                    previewModel.y = previewApp.screen.height * 0.44;
                     const scale = Math.min(w, h) / 1000;
                     previewModel.scale.set(scale * 0.24, scale * 0.24);
                 });

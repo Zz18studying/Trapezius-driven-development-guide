@@ -19,12 +19,9 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
 const enterDashboard = () => {
-  router.push('/admin/dashboard')
+  // 强制刷新页面，确保加载最新资源
+  window.location.href = '/admin/dashboard'
 }
 </script>
 

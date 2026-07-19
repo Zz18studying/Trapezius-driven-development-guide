@@ -8,14 +8,13 @@
 
     <!-- ===== 数据内容 ===== -->
     <template v-else>
-      <!-- KPI 卡片 -->
+      <!-- KPI 卡片（毛玻璃 + 渐变点缀） -->
       <el-row :gutter="20">
         <el-col :span="6" v-for="(item, index) in kpiList" :key="index">
-          <el-card class="kpi-card" shadow="hover">
-            <div class="kpi-icon">{{ item.icon }}</div>
+          <el-card class="kpi-card" shadow="hover" :style="`border-top: 4px solid ${item.borderColor || '#2c6e8a'};`">
+            <div class="kpi-icon" :style="`color: ${item.iconColor || '#2c6e8a'};`">{{ item.icon }}</div>
             <div class="kpi-title">{{ item.title }}</div>
             <div class="kpi-value">{{ item.value }}</div>
-            <div class="kpi-trend" :class="item.trendClass">{{ item.trend }}</div>
           </el-card>
         </el-col>
       </el-row>
@@ -23,25 +22,25 @@
       <!-- 图表行 -->
       <el-row :gutter="20" style="margin-top: 20px">
         <el-col :span="12">
-          <el-card>
+          <el-card class="chart-card">
             <template #header>
-              <span>近7天服务人次趋势</span>
-              <el-button size="small" style="float: right" @click="refreshData">刷新</el-button>
+              <span class="chart-title">📈 近7天服务人次趋势</span>
+              <el-button size="small" class="refresh-btn" @click="refreshData">刷新</el-button>
             </template>
             <div ref="trendChart" style="height: 300px; width: 100%;"></div>
           </el-card>
         </el-col>
         <el-col :span="12">
-          <el-card>
+          <el-card class="chart-card">
             <template #header>
-              <span>游客关注词云</span>
-              <span style="font-size: 12px; color: #999; margin-left: 8px;">
-                {{ keywordDateRange }} 内高频词 · TOP25
+              <span class="chart-title">☁️ 游客关注词云</span>
+              <span style="font-size: 12px; color: #8aa8b8; margin-left: 8px;">
+                {{ keywordDateRange }} · TOP25
               </span>
             </template>
             <div style="position: relative; height: 300px; width: 100%;">
               <div ref="wordCloudChart" style="height: 100%; width: 100%;"></div>
-              <div v-if="hotKeywords.length === 0" class="empty-state" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; text-align: center; pointer-events: none;">
+              <div v-if="hotKeywords.length === 0" class="empty-state">
                 <div class="empty-icon">🕊️</div>
                 <div class="empty-text">暂无词云数据</div>
                 <div class="empty-desc">请等待更多游客对话</div>
@@ -54,9 +53,9 @@
       <!-- 满意度趋势 -->
       <el-row style="margin-top: 20px">
         <el-col :span="24">
-          <el-card>
+          <el-card class="chart-card">
             <template #header>
-              <span>游客满意度趋势（近30天）</span>
+              <span class="chart-title">📊 游客满意度趋势（近30天）</span>
             </template>
             <div ref="satisfactionChart" style="height: 300px; width: 100%;"></div>
           </el-card>
@@ -73,13 +72,21 @@ import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 
+// ===================== KPI 卡片配色 =====================
+const kpiColors = [
+  { border: '#2c6e8a', icon: '#2c6e8a' },
+  { border: '#10b981', icon: '#10b981' },
+  { border: '#f59e0b', icon: '#f59e0b' },
+  { border: '#8b5cf6', icon: '#8b5cf6' }
+]
+
 // ===================== 响应式数据 =====================
 const loading = ref(true)
 const kpiList = ref([
-  { icon: '👥', title: '今日服务人次', value: 0, trend: '', trendClass: '' },
-  { icon: '📅', title: '近7天服务人次', value: 0, trend: '', trendClass: '' },
-  { icon: '⚡', title: '平均响应延迟', value: '0 s', trend: '', trendClass: '' },
-  { icon: '💬', title: '累计会话总数', value: 0, trend: '', trendClass: '' }
+  { icon: '👥', title: '今日服务人次', value: 0, borderColor: '#2c6e8a', iconColor: '#2c6e8a' },
+  { icon: '📅', title: '近7天服务人次', value: 0, borderColor: '#10b981', iconColor: '#10b981' },
+  { icon: '⚡', title: '平均响应延迟', value: '0 s', borderColor: '#f59e0b', iconColor: '#f59e0b' },
+  { icon: '💬', title: '累计会话总数', value: 0, borderColor: '#8b5cf6', iconColor: '#8b5cf6' }
 ])
 
 const hotKeywords = ref([])
@@ -118,11 +125,18 @@ const loadData = async () => {
         weekCount = days.reduce((sum, d) => sum + d.count, 0)
       }
 
+      const colors = [
+        { border: '#2c6e8a', icon: '#2c6e8a' },
+        { border: '#10b981', icon: '#10b981' },
+        { border: '#f59e0b', icon: '#f59e0b' },
+        { border: '#8b5cf6', icon: '#8b5cf6' }
+      ]
+
       kpiList.value = [
-        { icon: '👥', title: '今日服务人次', value: todayCount, trend: '', trendClass: '' },
-        { icon: '📅', title: '近7天服务人次', value: weekCount, trend: '', trendClass: '' },
-        { icon: '⚡', title: '平均响应延迟', value: avgResponseTime.toFixed(1) + ' s', trend: '', trendClass: '' },
-        { icon: '💬', title: '累计会话总数', value: totalConversations, trend: '', trendClass: '' }
+        { icon: '👥', title: '今日服务人次', value: todayCount, borderColor: colors[0].border, iconColor: colors[0].icon },
+        { icon: '📅', title: '近7天服务人次', value: weekCount, borderColor: colors[1].border, iconColor: colors[1].icon },
+        { icon: '⚡', title: '平均响应延迟', value: avgResponseTime.toFixed(1) + ' s', borderColor: colors[2].border, iconColor: colors[2].icon },
+        { icon: '💬', title: '累计会话总数', value: totalConversations, borderColor: colors[3].border, iconColor: colors[3].icon }
       ]
     }
 
@@ -177,14 +191,15 @@ const renderTrendChart = (dailyStats) => {
     })
     chart.setOption({
       tooltip: { trigger: 'axis' },
+      grid: { top: 20, bottom: 30, left: 50, right: 60 },
       xAxis: { type: 'category', data: dateList, axisLabel: { rotate: 0, fontSize: 12 } },
-      yAxis: { type: 'value', name: '人次' },
+      yAxis: { type: 'value', name: '人次', nameTextStyle: { color: '#8aa8b8' } },
       series: [{
         type: 'line',
         data: counts,
         smooth: true,
-        lineStyle: { color: '#10b981', width: 3 },
-        areaStyle: { opacity: 0.2, color: '#10b981' },
+        lineStyle: { color: '#2c6e8a', width: 3 },
+        areaStyle: { opacity: 0.2, color: '#2c6e8a' },
         symbol: 'circle',
         symbolSize: 8
       }]
@@ -244,6 +259,7 @@ const renderSatisfactionChart = (data) => {
                   正面：${item.positive} 条 | 中性：${item.neutral} 条 | 负面：${item.negative} 条`
         }
       },
+      grid: { top: 30, bottom: 40, left: 60, right: 60 },
       xAxis: {
         type: 'category',
         data: dateList,
@@ -258,9 +274,8 @@ const renderSatisfactionChart = (data) => {
         name: '满意度 (%)',
         min: 0,
         max: 100,
-        axisLabel: {
-          formatter: '{value}%'
-        }
+        axisLabel: { formatter: '{value}%' },
+        nameTextStyle: { color: '#8aa8b8' }
       },
       series: [{
         type: 'line',
@@ -283,7 +298,7 @@ const renderSatisfactionChart = (data) => {
             { yAxis: 70, label: { formatter: '良好线 70%', color: '#10b981' } },
             { yAxis: 50, label: { formatter: '及格线 50%', color: '#f59e0b' } }
           ],
-          lineStyle: { type: 'dashed', color: '#999' },
+          lineStyle: { type: 'dashed', color: '#ccc' },
           label: { fontSize: 10, color: '#999' }
         }
       }]
@@ -339,22 +354,23 @@ const renderWordCloud = () => {
           return `<strong>${params.name}</strong><br/>提及次数：<strong>${params.value}</strong> 次`
         },
         backgroundColor: 'rgba(255,255,255,0.9)',
-        borderColor: '#10b981',
+        borderColor: '#2c6e8a',
         borderWidth: 2,
         padding: [10, 15],
         textStyle: { color: '#333', fontSize: 14 }
       },
       series: [{
         type: 'wordCloud',
-        gridSize: 12,           // 增大间距，避免文字重叠
-        sizeRange: [18, 58],    // 字号范围调大
+        gridSize: 12,
+        sizeRange: [18, 58],
         rotationRange: [0, 0],
         shape: 'circle',
         width: '100%',
         height: '100%',
         textStyle: {
           color: function() {
-            return 'hsl(' + Math.round(Math.random() * 360) + ', 70%, 50%)'
+            const hue = Math.round(Math.random() * 360)
+            return `hsl(${hue}, 70%, 50%)`
           },
           fontWeight: 'bold',
           fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif'
@@ -393,32 +409,86 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ===== KPI 卡片 ===== */
 .kpi-card {
   position: relative;
   overflow: hidden;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease;
+  cursor: default;
 }
+.kpi-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(44, 110, 138, 0.12);
+}
+.kpi-card :deep(.el-card__body) {
+  padding: 20px 24px;
+}
+
 .kpi-icon {
   position: absolute;
-  right: 20px;
+  right: 60px;
   top: 20px;
   font-size: 36px;
-  opacity: 0.2;
+  opacity: 0.15;
 }
 .kpi-title {
   font-size: 14px;
-  color: var(--text-gray);
+  color: #6a8a9a;
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 .kpi-value {
   font-size: 32px;
   font-weight: 700;
-  color: var(--primary-color);
-  margin: 10px 0;
-}
-.trend-up {
-  color: #10b981;
-  font-size: 12px;
+  color: #1a3a4a;
+  margin-top: 6px;
+  letter-spacing: -0.5px;
 }
 
+/* ===== 图表卡片 ===== */
+.chart-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+.chart-card:hover {
+  box-shadow: 0 4px 24px rgba(44, 110, 138, 0.06);
+}
+.chart-card :deep(.el-card__header) {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(44, 110, 138, 0.06);
+  background: rgba(255, 255, 255, 0.3);
+}
+.chart-card :deep(.el-card__body) {
+  padding: 16px 20px 20px;
+}
+
+.chart-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a3a4a;
+}
+
+.refresh-btn {
+  float: right;
+  font-size: 12px;
+  color: #2c6e8a;
+  border-color: rgba(44, 110, 138, 0.2);
+  background: rgba(44, 110, 138, 0.04);
+}
+.refresh-btn:hover {
+  background: rgba(44, 110, 138, 0.1);
+  border-color: #2c6e8a;
+}
+
+/* ===== 加载 ===== */
 .loading-container {
   padding: 40px;
   text-align: center;
@@ -429,21 +499,28 @@ onMounted(() => {
   font-size: 14px;
 }
 
+/* ===== 空状态 ===== */
 .empty-state {
-  padding: 30px 0;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
   text-align: center;
+  pointer-events: none;
 }
 .empty-icon {
   font-size: 48px;
   margin-bottom: 12px;
+  opacity: 0.3;
 }
 .empty-text {
   font-size: 16px;
-  color: #606266;
+  color: #8aa8b8;
   margin-bottom: 4px;
 }
 .empty-desc {
   font-size: 13px;
-  color: #909399;
+  color: #b0c8d8;
 }
 </style>

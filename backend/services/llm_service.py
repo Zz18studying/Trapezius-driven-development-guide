@@ -100,7 +100,7 @@ class LLMService:
             "拈花", "门票", "票价", "多少钱", "开放", "几点", "时间", "表演", "演出",
             "路线", "怎么玩", "怎么逛", "怎么去", "停车", "观光车", "雨天", "下雨",
             "孩子", "亲子", "老人", "半天", "推荐", "好玩", "特色", "看点", "历史",
-            "文化", "高度", "多高", "在哪里", "介绍一下"
+            "文化", "高度", "多高", "在哪里", "介绍一下","开发团队"
         ]
         return any(keyword in question for keyword in knowledge_keywords)
 
@@ -142,14 +142,37 @@ class LLMService:
         patterns = [
             r"怎么逛", r"怎么玩", r"路线", r"推荐.*路线", r"应该怎么走",
             r"游览顺序", r"先去哪里", r"怎么安排", r"行程", r"怎么游",
-            r"逛完.*需要多久", r"路线规划", r"怎么走比较顺"
+            r"逛完.*需要多久", r"路线规划", r"怎么走比较顺", r"攻略"
         ]
         return any(re.search(pattern, question) for pattern in patterns)
+
+    def _is_advice_question(self, question: str) -> bool:
+        """识别可给导游式建议的问题，避免把推荐/路线类问题当成强事实问答卡死。"""
+        advice_patterns = [
+            r"推荐", r"建议", r"适合", r"攻略", r"怎么玩", r"怎么逛", r"怎么游",
+            r"怎么安排", r"行程", r"路线", r"游览", r"游玩", r"先去哪里",
+            r"值得去", r"好玩吗", r"轻松", r"省力", r"少走路", r"打卡",
+            r"拍照", r"亲子", r"孩子", r"老人", r"父母", r"情侣", r"朋友",
+            r"同学", r"闺蜜", r"双人", r"两个人", r"一个人", r"家庭",
+            r"雨天", r"下雨", r"半天", r"半日", r"一天", r"首次|第一次"
+        ]
+        return self._is_route_question(question) or any(re.search(pattern, question) for pattern in advice_patterns)
+
+    def _is_strict_fact_question(self, question: str) -> bool:
+        """价格、时间、场次、交通等需要严格依据资料的事实类问题。"""
+        strict_patterns = [
+            r"多少钱", r"票价", r"门票", r"免费", r"半价", r"优惠",
+            r"开放", r"几点", r"时间", r"场次", r"演出", r"表演",
+            r"多高", r"高度", r"怎么去", r"怎么走", r"交通", r"停车",
+            r"公交", r"自驾", r"观光车"
+        ]
+        return any(re.search(pattern, question) for pattern in strict_patterns)
 
     def _extract_travel_context_from_question(self, question: str) -> dict:
         context = {
             "with_children": False,
             "with_elderly": False,
+            "with_partner": False,
             "time_constraint": "",
             "weather": "",
             "energy_level": "",
@@ -160,6 +183,9 @@ class LLMService:
             context["has_constraint"] = True
         if re.search(r"老人|长辈|父母|爸妈|带父母", question):
             context["with_elderly"] = True
+            context["has_constraint"] = True
+        if re.search(r"双人|两个人|2个人|情侣|约会|朋友两人", question):
+            context["with_partner"] = True
             context["has_constraint"] = True
         if re.search(r"半天|半日|只有.*小时", question):
             context["time_constraint"] = "half_day"
@@ -265,6 +291,8 @@ class LLMService:
             merged["with_children"] = True
         if current.get("with_elderly"):
             merged["with_elderly"] = True
+        if current.get("with_partner"):
+            merged["with_partner"] = True
         if current.get("time_constraint"):
             merged["time_constraint"] = current["time_constraint"]
         if current.get("weather"):
@@ -305,6 +333,8 @@ class LLMService:
             notes.append("同行有孩子，优先互动性强、动线轻松的景点。")
         if final_travel_context.get("with_elderly"):
             notes.append("同行有老人，优先平缓易行、休息方便的安排。")
+        if final_travel_context.get("with_partner"):
+            notes.append("用户是双人同行，优先风景体验、拍照打卡和节奏舒适的路线。")
         if final_travel_context.get("time_constraint") == "half_day":
             notes.append("用户只有半天，建议控制在3-4个核心点。")
         elif final_travel_context.get("time_constraint") == "quick":
@@ -464,8 +494,18 @@ class LLMService:
         if ("暂无相关信息" in answer or "暂时没查到" in answer) and self._context_relevant_to_question(question, context):
             return True, "答案拒答但参考资料相关"
 
-        high_risk_patterns = r"多少钱|票价|门票|免费|半价|开放|几点|时间|场次|演出|表演|多高|高度|路线|怎么去|怎么走|停车|观光车"
-        if re.search(high_risk_patterns, question):
+        is_advice_question = self._is_advice_question(question)
+        is_strict_fact_question = self._is_strict_fact_question(question)
+
+        if is_advice_question and not is_strict_fact_question:
+            unsupported_numbers = self._unsupported_numeric_facts(answer, context)
+            if unsupported_numbers:
+                return True, f"路线建议含参考资料外数字: {unsupported_numbers[:3]}"
+            if top_score and top_score < 3.5:
+                return True, f"游玩建议检索置信度偏低({top_score:.2f})"
+            return False, "游玩建议已有参考资料，允许直接生成"
+
+        if is_strict_fact_question:
             unsupported_numbers = self._unsupported_numeric_facts(answer, context)
             if unsupported_numbers:
                 return True, f"答案含参考资料外数字: {unsupported_numbers[:3]}"
